@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -9,21 +8,41 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-// ── 1. نموذج البيانات ──
+// ── 1. نموذج القناة ──
 class Channel {
   final String id, name, url, group;
   final String? logo;
   bool isFavorite;
 
-  Channel({required this.id, required this.name, required this.url, this.logo, required this.group, this.isFavorite = false});
+  Channel({
+    required this.id,
+    required this.name,
+    required this.url,
+    this.logo,
+    required this.group,
+    this.isFavorite = false,
+  });
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'url': url, 'logo': logo, 'group': group, 'isFavorite': isFavorite};
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'url': url,
+        'logo': logo,
+        'group': group,
+        'isFavorite': isFavorite,
+      };
 
   factory Channel.fromJson(Map<String, dynamic> j) => Channel(
-        id: j['id'] ?? '', name: j['name'] ?? '', url: j['url'] ?? '', logo: j['logo'], group: j['group'] ?? 'عام', isFavorite: j['isFavorite'] ?? false);
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        url: j['url'] ?? '',
+        logo: j['logo'],
+        group: j['group'] ?? 'عام',
+        isFavorite: j['isFavorite'] ?? false,
+      );
 }
 
-// ── 2. معالج قوائم M3U ──
+// ── 2. محلل روابط M3U ──
 class M3uService {
   static const _uuid = Uuid();
   static Future<List<Channel>> fetchAndParse(String url) async {
@@ -60,32 +79,25 @@ class HeedarTvApp extends StatelessWidget {
     return MaterialApp(
       title: 'Heedar TV',
       debugShowCheckedModeBanner: false,
-      locale: const Locale('ar'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF08090C), // أسود فاحم سينمائي
-        primaryColor: const Color(0xFFD4AF37), // ذهبي ملكي
+        scaffoldBackgroundColor: const Color(0xFF07080A),
+        primaryColor: const Color(0xFFD4AF37),
         fontFamily: 'sans-serif',
       ),
-      home: const LuxuryHomeScreen(),
+      home: const LuxuryPortalScreen(),
     );
   }
 }
 
-// ── 4. الشاشة الرئيسية الفاخرة بالبطاقات الثلاث ──
-class LuxuryHomeScreen extends StatefulWidget {
-  const LuxuryHomeScreen({super.key});
+// ── 4. الواجهة الرئيسية (القائمة على اليسار + 3 كروت سينمائية) ──
+class LuxuryPortalScreen extends StatefulWidget {
+  const LuxuryPortalScreen({super.key});
   @override
-  State<LuxuryHomeScreen> createState() => _LuxuryHomeScreenState();
+  State<LuxuryPortalScreen> createState() => _LuxuryPortalScreenState();
 }
 
-class _LuxuryHomeScreenState extends State<LuxuryHomeScreen> {
+class _LuxuryPortalScreenState extends State<LuxuryPortalScreen> {
   List<Channel> _channels = [];
   bool _loading = false;
 
@@ -98,8 +110,8 @@ class _LuxuryHomeScreenState extends State<LuxuryHomeScreen> {
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
-    final data = p.getString('ch_data');
-    final favs = p.getStringList('ch_favs') ?? [];
+    final data = p.getString('ch_list');
+    final favs = p.getStringList('fav_list') ?? [];
     if (data != null) {
       final List dec = jsonDecode(data);
       setState(() {
@@ -114,24 +126,24 @@ class _LuxuryHomeScreenState extends State<LuxuryHomeScreen> {
 
   Future<void> _save() async {
     final p = await SharedPreferences.getInstance();
-    await p.setString('ch_data', jsonEncode(_channels.map((e) => e.toJson()).toList()));
-    await p.setStringList('ch_favs', _channels.where((e) => e.isFavorite).map((e) => e.url).toList());
+    await p.setString('ch_list', jsonEncode(_channels.map((e) => e.toJson()).toList()));
+    await p.setStringList('fav_list', _channels.where((e) => e.isFavorite).map((e) => e.url).toList());
   }
 
-  void _addPlaylistDialog() {
+  void _addSourceDialog() {
     final u = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141722),
+        backgroundColor: const Color(0xFF11141C),
         title: const Text('إضافة رابط M3U / M3U8', style: TextStyle(color: Color(0xFFD4AF37))),
-        content: TextField(controller: u, decoration: const InputDecoration(labelText: 'ضع الرابط المباشر هنا')),
+        content: TextField(controller: u, decoration: const InputDecoration(labelText: 'رابط البث المباشر')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
             onPressed: () async {
-              if (u.text.isNotEmpty) {
+              if (u.text.trim().isNotEmpty) {
                 Navigator.pop(ctx);
                 setState(() => _loading = true);
                 try {
@@ -142,7 +154,7 @@ class _LuxuryHomeScreenState extends State<LuxuryHomeScreen> {
                 if (mounted) setState(() => _loading = false);
               }
             },
-            child: const Text('تحميل القنوات'),
+            child: const Text('تحميل'),
           ),
         ],
       ),
@@ -152,172 +164,194 @@ class _LuxuryHomeScreenState extends State<LuxuryHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: Row(
+        // الشريط الجانبي على اليسار حصرياً
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          // 1. القائمة الجانبية (Left Sidebar)
+          Container(
+            width: 62,
+            color: const Color(0xFF0C0E14),
             child: Column(
               children: [
-                // الهيدر والشعار الذهبي
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFD4AF37), width: 1.5)),
-                          child: const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 24),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFD4AF37), width: 1.5)),
+                  child: const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 24),
+                ),
+                const Divider(color: Colors.white12, height: 30),
+                IconButton(
+                  tooltip: 'إضافة مصدر',
+                  icon: const Icon(Icons.add_circle, color: Color(0xFFD4AF37), size: 28),
+                  onPressed: _addSourceDialog,
+                ),
+                IconButton(
+                  tooltip: 'المفضلة',
+                  icon: const Icon(Icons.star, color: Colors.amber, size: 26),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => LiveViewScreen(channels: _channels.where((c) => c.isFavorite).toList(), onSave: _save)));
+                  },
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'مسح القنوات',
+                  icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                  onPressed: () async {
+                    final p = await SharedPreferences.getInstance();
+                    await p.remove('ch_list');
+                    setState(() => _channels.clear());
+                  },
+                ),
+                const SizedBox(height: 14),
+              ],
+            ),
+          ),
+          const VerticalDivider(width: 1, color: Colors.white12),
+
+          // 2. الواجهة الرئيسية بالبطاقات الثلاث
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // الهيدر والاسم الذهبي
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('HEEDAR TV', style: TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                          SizedBox(height: 2),
+                          Text('البوابة الملكية الترفيهية الفاخرة', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141722),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
                         ),
-                        const SizedBox(width: 12),
-                        const Text('HEEDAR TV', style: TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-                      ],
-                    ),
-                    Row(
+                        child: Text('${_channels.length} قناة متاحة', style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ── البطاقات الثلاث بالصور المناسبة ──
+                  Expanded(
+                    child: Row(
                       children: [
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
-                          icon: const Icon(Icons.add_link),
-                          label: const Text('إضافة مصدر'),
-                          onPressed: _addPlaylistDialog,
+                        // كرت البث المباشر (صورة بث واستوديو)
+                        _card(
+                          title: 'بث مباشر',
+                          sub: 'قنوات فضائية ورياضية',
+                          img: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=700',
+                          icon: Icons.live_tv_rounded,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => LiveViewScreen(channels: _channels, onSave: _save)));
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                          tooltip: 'مسح القنوات',
-                          onPressed: () async {
-                            final p = await SharedPreferences.getInstance();
-                            await p.remove('ch_data');
-                            setState(() => _channels.clear());
+                        const SizedBox(width: 14),
+
+                        // كرت الأفلام (صورة سينما ومسرح)
+                        _card(
+                          title: 'الأفلام',
+                          sub: 'مكتبة VOD السينمائية',
+                          img: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=700',
+                          icon: Icons.movie_creation_rounded,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم الأفلام جاهز للمشاهدة')));
+                          },
+                        ),
+                        const SizedBox(width: 14),
+
+                        // كرت المسلسلات (صورة إنتاج وتلفزيون)
+                        _card(
+                          title: 'المسلسلات',
+                          sub: 'المواسم والحلقات الكاملة',
+                          img: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=700',
+                          icon: Icons.tv_rounded,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم المسلسلات جاهز للمشاهدة')));
                           },
                         ),
                       ],
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required String title, required String sub, required String img, required IconData icon, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.35), width: 1.5),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(imageUrl: img, fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(color: const Color(0xFF141722))),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.black.withOpacity(0.15), Colors.black.withOpacity(0.88)],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 20),
-
-                // ── البطاقات الثلاث الرئيسية (الصور المصغرة الفاخرة) ──
-                Expanded(
-                  child: Row(
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. بطاقة البث المباشر
-                      _buildPortalCard(
-                        title: 'بث مباشر',
-                        subtitle: '${_channels.length} قناة متاحة',
-                        imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=600',
-                        icon: Icons.live_tv_rounded,
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => LivePlayerScreen(channels: _channels, onSave: _save)));
-                        },
-                      ),
-                      const SizedBox(width: 16),
-
-                      // 2. بطاقة الأفلام
-                      _buildPortalCard(
-                        title: 'الأفلام',
-                        subtitle: 'مكتبة VOD السينمائية',
-                        imageUrl: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600',
-                        icon: Icons.movie_creation_rounded,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم الأفلام جاهز')));
-                        },
-                      ),
-                      const SizedBox(width: 16),
-
-                      // 3. بطاقة المسلسلات
-                      _buildPortalCard(
-                        title: 'المسلسلات',
-                        subtitle: 'المواسم والحلقات الكاملة',
-                        imageUrl: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=600',
-                        icon: Icons.tv_rounded,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم المسلسلات جاهز')));
-                        },
-                      ),
+                      CircleAvatar(backgroundColor: const Color(0xFFD4AF37), radius: 20, child: Icon(icon, color: Colors.black, size: 22)),
+                      const SizedBox(height: 10),
+                      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(height: 3),
+                      Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          if (_loading)
-            Container(color: Colors.black54, child: const Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPortalCard({required String title, required String subtitle, required String imageUrl, required IconData icon, required VoidCallback onTap}) {
-    return Expanded(
-      child: Focus(
-        child: Builder(builder: (context) {
-          final isFocused = Focus.of(context).hasFocus;
-          return InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(18),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: isFocused ? const Color(0xFFD4AF37) : Colors.white12, width: isFocused ? 3 : 1),
-                boxShadow: [if (isFocused) BoxShadow(color: const Color(0xFFD4AF37).withOpacity(0.35), blurRadius: 15)],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(17),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(color: const Color(0xFF141722))),
-                    // تدرج أسود فاحم مع لمسة ذهبية
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.black.withOpacity(0.15), Colors.black.withOpacity(0.85)],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(backgroundColor: const Color(0xFFD4AF37), radius: 22, child: Icon(icon, color: Colors.black, size: 24)),
-                          const SizedBox(height: 10),
-                          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const SizedBox(height: 4),
-                          Text(subtitle, style: const TextStyle(fontSize: 12, color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
+        ),
       ),
     );
   }
 }
 
-// ── 5. شاشة المشغل المباشر (قنوات + بث فوري) ──
-class LivePlayerScreen extends StatefulWidget {
+// ── 5. شاشة البث المباشر (قنوات + مشغل بجانبها فوري) ──
+class LiveViewScreen extends StatefulWidget {
   final List<Channel> channels;
   final VoidCallback onSave;
-  const LivePlayerScreen({super.key, required this.channels, required this.onSave});
+  const LiveViewScreen({super.key, required this.channels, required this.onSave});
   @override
-  State<LivePlayerScreen> createState() => _LivePlayerScreenState();
+  State<LiveViewScreen> createState() => _LiveViewScreenState();
 }
 
-class _LivePlayerScreenState extends State<LivePlayerScreen> {
-  Channel? _current;
+class _LiveViewScreenState extends State<LiveViewScreen> {
+  Channel? _cur;
   VideoPlayerController? _c;
   String _cat = 'الكل', _q = '';
-  bool _loading = false;
+  bool _load = false;
 
   @override
   void initState() {
@@ -332,12 +366,12 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
   }
 
   void _play(Channel ch) {
-    setState(() { _current = ch; _loading = true; });
+    setState(() { _cur = ch; _load = true; });
     _c?.dispose();
     _c = VideoPlayerController.networkUrl(Uri.parse(ch.url))
       ..initialize().then((_) {
-        if (mounted) { setState(() => _loading = false); _c?.play(); }
-      }).catchError((_) { if (mounted) setState(() => _loading = false); });
+        if (mounted) { setState(() => _load = false); _c?.play(); }
+      }).catchError((_) { if (mounted) setState(() => _load = false); });
   }
 
   @override
@@ -352,11 +386,11 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
     return Scaffold(
       body: Row(
         children: [
-          // شريط القنوات الجانبي
+          // قائمة القنوات
           Expanded(
             flex: 4,
             child: Container(
-              color: const Color(0xFF0F1117),
+              color: const Color(0xFF0C0E14),
               child: Column(
                 children: [
                   Row(
@@ -365,7 +399,7 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
                       Expanded(
                         child: TextField(
                           onChanged: (v) => setState(() => _q = v),
-                          decoration: const InputDecoration(hintText: 'بحث عن قناة...', isDense: true, border: InputBorder.none),
+                          decoration: const InputDecoration(hintText: 'ابحث عن قناة...', isDense: true, border: InputBorder.none),
                         ),
                       ),
                     ],
@@ -381,7 +415,7 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
                           label: Text(cats[i], style: const TextStyle(fontSize: 11)),
                           selected: _cat == cats[i],
                           selectedColor: const Color(0xFFD4AF37),
-                          backgroundColor: const Color(0xFF161821),
+                          backgroundColor: const Color(0xFF141722),
                           onSelected: (_) => setState(() => _cat = cats[i]),
                         ),
                       ),
@@ -392,10 +426,10 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
                       itemCount: list.length,
                       itemBuilder: (_, i) {
                         final ch = list[i];
-                        final isSel = ch.url == _current?.url;
+                        final isSel = ch.url == _cur?.url;
                         return ListTile(
                           dense: true,
-                          tileColor: isSel ? const Color(0xFFD4AF37).withOpacity(0.2) : null,
+                          tileColor: isSel ? const Color(0xFFD4AF37).withOpacity(0.18) : null,
                           title: Text(ch.name, maxLines: 1, style: TextStyle(fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? const Color(0xFFD4AF37) : Colors.white)),
                           trailing: IconButton(
                             icon: Icon(ch.isFavorite ? Icons.star : Icons.star_border, color: ch.isFavorite ? Colors.amber : Colors.white24, size: 18),
@@ -410,18 +444,19 @@ class _LivePlayerScreenState extends State<LivePlayerScreen> {
               ),
             ),
           ),
+          const VerticalDivider(width: 1, color: Colors.white12),
 
-          // شاشة البث المباشر
+          // نافذة المشغل الفوري
           Expanded(
             flex: 6,
             child: Container(
               color: Colors.black,
               child: Center(
-                child: _loading
+                child: _load
                     ? const CircularProgressIndicator(color: Color(0xFFD4AF37))
                     : _c != null && _c!.value.isInitialized
                         ? AspectRatio(aspectRatio: _c!.value.aspectRatio, child: VideoPlayer(_c!))
-                        : const Text('اختر قناة للبدء', style: TextStyle(color: Colors.white54)),
+                        : const Text('اختر قناة للبدء بالبث', style: TextStyle(color: Colors.white54)),
               ),
             ),
           ),
