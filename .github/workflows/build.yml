@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Heedar TV (OwnTV Engine)
 
 on:
   push:
@@ -9,33 +9,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: 'temurin'
+          java-version: '21'
 
-      - name: Flutter
-        uses: subosito/flutter-action@v2
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
         with:
-          channel: 'stable'
+          packages: 'platform-tools'
 
-      - name: Build App
+      - name: Clone OwnTV & Rebrand to Heedar TV
         run: |
-          flutter create --org com.heedar --project-name heedar_tv app
-          cd app
-          flutter pub add video_player shared_preferences http wakelock_plus uuid cached_network_image google_fonts
-          flutter pub add flutter_localizations --sdk=flutter
-          cp ../lib/main.dart lib/main.dart
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
-          flutter build apk --release
+          git clone --depth 1 https://github.com/ahXN00/OwnTV.git app_src
+          cd app_src
 
-      - name: Upload
+          # تغيير اسم التطبيق إلى Heedar TV
+          find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>OwnTV</>Heedar TV</g' {} +
+          sed -i 's/OwnTV/Heedar TV/g' app/src/main/AndroidManifest.xml
+
+          chmod +x ./gradlew
+          ./gradlew assembleStandardDebug --no-daemon
+
+      - name: Upload Heedar TV APK
         uses: actions/upload-artifact@v4
         with:
-          name: HeedarTV-APK
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          name: HeedarTV-OwnTV-Edition
+          path: app_src/app/build/outputs/apk/standard/debug/*.apk
