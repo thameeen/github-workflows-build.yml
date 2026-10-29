@@ -43,7 +43,7 @@ class Channel {
         name: json['name'] as String,
         url: json['url'] as String,
         logo: json['logo'] as String?,
-        group: json['group'] as String? ?? 'General',
+        group: json['group'] as String? ?? 'عام',
         isFavorite: json['isFavorite'] as bool? ?? false,
       );
 }
@@ -149,8 +149,16 @@ class AppStrings {
       'loading': 'جاري استيراد القنوات...',
       'success': 'تم استيراد القنوات بنجاح',
       'error': 'تعذر جلب المصدر، يرجى فحص الرابط',
-      'lang': 'اللغة / Language',
-      'clear_cache': 'مسح جميع القنوات المحفوظة',
+      'lang': 'لغة التطبيق',
+      'clear_cache': 'مسح القنوات والذاكرة المؤقتة',
+      'player_settings': 'إعدادات المشغل',
+      'aspect_ratio': 'أبعاد الشاشة الافتراضية',
+      'keep_awake': 'إبقاء الشاشة مضاءة أثناء البث',
+      'tv_mode': 'وضع شاشات Android TV وتحديد الريموت',
+      'about': 'حول التطبيق',
+      'version_info': 'النسخة الفاخرة 1.2 — للهواتف وشاشات التلفزيون',
+      'confirm_clear': 'هل أنت متأكد من مسح جميع القنوات؟',
+      'cleared_msg': 'تم مسح جميع البيانات والقنوات بنجاح',
     },
     'en': {
       'app_title': 'Heedar TV',
@@ -176,8 +184,16 @@ class AppStrings {
       'loading': 'Importing channels...',
       'success': 'Channels imported successfully',
       'error': 'Failed to import source. Check URL.',
-      'lang': 'Language / اللغة',
-      'clear_cache': 'Clear all cached channels',
+      'lang': 'App Language',
+      'clear_cache': 'Clear Cached Channels',
+      'player_settings': 'Player Settings',
+      'aspect_ratio': 'Default Screen Aspect Ratio',
+      'keep_awake': 'Keep Screen Awake during stream',
+      'tv_mode': 'Android TV Remote Highlight Mode',
+      'about': 'About Heedar TV',
+      'version_info': 'Luxury Edition 1.2 — Phones & TV Screens',
+      'confirm_clear': 'Are you sure you want to clear all channels?',
+      'cleared_msg': 'All channels cleared successfully',
     }
   };
 
@@ -267,7 +283,7 @@ class _HeedarTvAppState extends State<HeedarTvApp> {
 }
 
 // ==========================================
-// 5. الشاشة الرئيسية والهيكل العام مع دعم TV
+// 5. الشاشة الرئيسية والهيكل العام
 // ==========================================
 class MainShellScreen extends StatefulWidget {
   final String currentLang;
@@ -283,10 +299,25 @@ class _MainShellScreenState extends State<MainShellScreen> {
   final List<Map<String, String>> _sources = [];
   bool _isLoading = false;
 
+  // إعدادات المستخدم المحفوظة
+  String _aspectRatioMode = '16:9';
+  bool _keepAwake = true;
+  bool _tvFocusHighlight = true;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _aspectRatioMode = prefs.getString('pref_aspect_ratio') ?? '16:9';
+      _keepAwake = prefs.getBool('pref_keep_awake') ?? true;
+      _tvFocusHighlight = prefs.getBool('pref_tv_highlight') ?? true;
+    });
   }
 
   Future<void> _loadData() async {
@@ -371,7 +402,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     await prefs.setStringList('tv_favorites', favList);
   }
 
-  void _clearCache() async {
+  void _clearAllChannels() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('tv_channels');
     await prefs.remove('tv_sources');
@@ -380,6 +411,14 @@ class _MainShellScreenState extends State<MainShellScreen> {
       _channels.clear();
       _sources.clear();
     });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppStrings.get('cleared_msg', widget.currentLang)),
+          backgroundColor: const Color(0xFFD4AF37),
+        ),
+      );
+    }
   }
 
   @override
@@ -399,59 +438,75 @@ class _MainShellScreenState extends State<MainShellScreen> {
       body: Row(
         textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
         children: [
-          NavigationRail(
-            backgroundColor: const Color(0xFF111218),
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (val) => setState(() => _selectedIndex = val),
-            labelType: NavigationRailLabelType.all,
-            selectedIconTheme:
-                const IconThemeData(color: Color(0xFFD4AF37), size: 28),
-            unselectedIconTheme:
-                const IconThemeData(color: Colors.white54, size: 24),
-            selectedLabelTextStyle: const TextStyle(
-                color: Color(0xFFD4AF37),
-                fontWeight: FontWeight.bold,
-                fontSize: 12),
-            unselectedLabelTextStyle:
-                const TextStyle(color: Colors.white54, fontSize: 11),
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFD4AF37), width: 1.5),
+          // شريط تنقل جانبي متطور مع إمكانية التمرير لشاشات التلفزيون
+          Container(
+            color: const Color(0xFF111218),
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height,
                 ),
-                child: const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 28),
+                child: IntrinsicHeight(
+                  child: NavigationRail(
+                    backgroundColor: Colors.transparent,
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: (val) =>
+                        setState(() => _selectedIndex = val),
+                    labelType: NavigationRailLabelType.all,
+                    selectedIconTheme: const IconThemeData(
+                        color: Color(0xFFD4AF37), size: 28),
+                    unselectedIconTheme:
+                        const IconThemeData(color: Colors.white54, size: 24),
+                    selectedLabelTextStyle: const TextStyle(
+                        color: Color(0xFFD4AF37),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11),
+                    unselectedLabelTextStyle:
+                        const TextStyle(color: Colors.white54, fontSize: 10),
+                    leading: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: const Color(0xFFD4AF37), width: 1.5),
+                        ),
+                        child: const Icon(Icons.tv,
+                            color: Color(0xFFD4AF37), size: 26),
+                      ),
+                    ),
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.home_outlined),
+                        selectedIcon: const Icon(Icons.home),
+                        label: Text(AppStrings.get('home', lang)),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.live_tv_outlined),
+                        selectedIcon: const Icon(Icons.live_tv),
+                        label: Text(AppStrings.get('live_tv', lang)),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.star_border),
+                        selectedIcon: const Icon(Icons.star),
+                        label: Text(AppStrings.get('favorites', lang)),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.cloud_download_outlined),
+                        selectedIcon: const Icon(Icons.cloud_download),
+                        label: Text(AppStrings.get('sources', lang)),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.settings_outlined),
+                        selectedIcon: const Icon(Icons.settings),
+                        label: Text(AppStrings.get('settings', lang)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            destinations: [
-              NavigationRailDestination(
-                icon: const Icon(Icons.home_outlined),
-                selectedIcon: const Icon(Icons.home),
-                label: Text(AppStrings.get('home', lang)),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.live_tv_outlined),
-                selectedIcon: const Icon(Icons.live_tv),
-                label: Text(AppStrings.get('live_tv', lang)),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.star_border),
-                selectedIcon: const Icon(Icons.star),
-                label: Text(AppStrings.get('favorites', lang)),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.cloud_download_outlined),
-                selectedIcon: const Icon(Icons.cloud_download),
-                label: Text(AppStrings.get('sources', lang)),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.settings_outlined),
-                selectedIcon: const Icon(Icons.settings),
-                label: Text(AppStrings.get('settings', lang)),
-              ),
-            ],
           ),
           const VerticalDivider(width: 1, thickness: 1, color: Colors.white12),
           Expanded(child: pages[_selectedIndex]),
@@ -477,7 +532,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
+              border:
+                  Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
             ),
             child: Row(
               children: [
@@ -497,7 +553,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
                       const SizedBox(height: 8),
                       Text(
                         AppStrings.get('welcome_msg', lang),
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        style:
+                            const TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                     ],
                   ),
@@ -572,13 +629,15 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // --- شاشة القنوات والمفضلة مع تصنيفات وبحث ---
+  // --- شاشة القنوات والمفضلة ---
   Widget _buildChannelsView(String lang, bool onlyFavs) {
     return _ChannelExplorer(
       channels:
           onlyFavs ? _channels.where((c) => c.isFavorite).toList() : _channels,
       isFavMode: onlyFavs,
       lang: lang,
+      aspectRatio: _aspectRatioMode,
+      keepAwake: _keepAwake,
       onToggleFav: _toggleFav,
     );
   }
@@ -689,7 +748,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
                     color: const Color(0xFF161821),
                     margin: const EdgeInsets.only(bottom: 12),
                     child: ListTile(
-                      leading: const Icon(Icons.link, color: Color(0xFFD4AF37)),
+                      leading:
+                          const Icon(Icons.link, color: Color(0xFFD4AF37)),
                       title: Text(s['name'] ?? '',
                           style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(s['url'] ?? '',
@@ -717,34 +777,37 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // --- شاشة الإعدادات ---
+  // ==========================================
+  // شاشة الإعدادات الشاملة والفاخرة
+  // ==========================================
   Widget _buildSettingsView(String lang) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
         children: [
           Text(
             AppStrings.get('settings', lang),
             style: const TextStyle(
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFFD4AF37)),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+
+          // 1. قسم اللغات
+          _buildSettingsHeader(AppStrings.get('lang', lang), Icons.language),
           ListTile(
             tileColor: const Color(0xFF161821),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            leading: const Icon(Icons.language, color: Color(0xFFD4AF37)),
-            title: Text(AppStrings.get('lang', lang)),
+            title: const Text('اللغة / Language'),
             trailing: DropdownButton<String>(
               dropdownColor: const Color(0xFF1E212D),
               value: lang,
               underline: const SizedBox(),
               items: const [
-                DropdownMenuItem(value: 'ar', child: Text('العربية')),
-                DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'ar', child: Text('العربية 🇸🇦')),
+                DropdownMenuItem(value: 'en', child: Text('English 🇺🇸')),
               ],
               onChanged: (val) {
                 if (val != null) {
@@ -753,20 +816,160 @@ class _MainShellScreenState extends State<MainShellScreen> {
               },
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+
+          // 2. قسم إعدادات المشغل (Player)
+          _buildSettingsHeader(
+              AppStrings.get('player_settings', lang), Icons.play_circle_fill),
           ListTile(
             tileColor: const Color(0xFF161821),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+            title: Text(AppStrings.get('aspect_ratio', lang)),
+            trailing: DropdownButton<String>(
+              dropdownColor: const Color(0xFF1E212D),
+              value: _aspectRatioMode,
+              underline: const SizedBox(),
+              items: const [
+                DropdownMenuItem(value: '16:9', child: Text('16:9 (عريض)')),
+                DropdownMenuItem(value: '4:3', child: Text('4:3 (كلاسيكي)')),
+                DropdownMenuItem(value: 'auto', child: Text('تلقائي (Auto)')),
+              ],
+              onChanged: (val) async {
+                if (val != null) {
+                  setState(() => _aspectRatioMode = val);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('pref_aspect_ratio', val);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            tileColor: const Color(0xFF161821),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            activeColor: const Color(0xFFD4AF37),
+            title: Text(AppStrings.get('keep_awake', lang)),
+            subtitle: const Text('منع إطفاء الشاشة عند المشاهدة',
+                style: TextStyle(fontSize: 12, color: Colors.white54)),
+            value: _keepAwake,
+            onChanged: (val) async {
+              setState(() => _keepAwake = val);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('pref_keep_awake', val);
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // 3. قسم دعم أجهزة التلفزيون
+          _buildSettingsHeader('أجهزة التلفزيون والريموت', Icons.tv),
+          SwitchListTile(
+            tileColor: const Color(0xFF161821),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            activeColor: const Color(0xFFD4AF37),
+            title: Text(AppStrings.get('tv_mode', lang)),
+            subtitle: const Text('إظهار إطار ذهبي مضيء على القناة المحددة',
+                style: TextStyle(fontSize: 12, color: Colors.white54)),
+            value: _tvFocusHighlight,
+            onChanged: (val) async {
+              setState(() => _tvFocusHighlight = val);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('pref_tv_highlight', val);
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // 4. قسم مسح الذاكرة
+          _buildSettingsHeader('إدارة البيانات', Icons.storage),
+          ListTile(
+            tileColor: const Color(0xFF161821),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
             title: Text(AppStrings.get('clear_cache', lang)),
+            subtitle: Text('عدد القنوات المحفوظة: ${_channels.length}',
+                style: const TextStyle(fontSize: 12, color: Colors.white54)),
             onTap: () {
-              _clearCache();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم تنظيف الذاكرة والقنوات')),
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: const Color(0xFF1A1D27),
+                  title: const Text('تأكيد المسح'),
+                  content: Text(AppStrings.get('confirm_clear', lang)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(AppStrings.get('cancel', lang)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _clearAllChannels();
+                      },
+                      child: Text(AppStrings.get('delete', lang),
+                          style: const TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
               );
             },
           ),
+          const SizedBox(height: 20),
+
+          // 5. بطاقة حول التطبيق الفاخرة
+          _buildSettingsHeader(AppStrings.get('about', lang), Icons.info_outline),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161821),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: const Color(0xFFD4AF37).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.verified,
+                    color: Color(0xFFD4AF37), size: 36),
+                const SizedBox(width: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('HEEDAR TV — LUXURY',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Color(0xFFD4AF37))),
+                    const SizedBox(height: 4),
+                    Text(AppStrings.get('version_info', lang),
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white54)),
+                  ],
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFFD4AF37), size: 18),
+          const SizedBox(width: 8),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white70)),
         ],
       ),
     );
@@ -780,12 +983,16 @@ class _ChannelExplorer extends StatefulWidget {
   final List<Channel> channels;
   final bool isFavMode;
   final String lang;
+  final String aspectRatio;
+  final bool keepAwake;
   final Function(Channel) onToggleFav;
 
   const _ChannelExplorer({
     required this.channels,
     required this.isFavMode,
     required this.lang,
+    required this.aspectRatio,
+    required this.keepAwake,
     required this.onToggleFav,
   });
 
@@ -836,284 +1043,4 @@ class _ChannelExplorerState extends State<_ChannelExplorer> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
-              itemBuilder: (ctx, i) {
-                final cat = categories[i];
-                final isSel = cat == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: ChoiceChip(
-                    label: Text(cat),
-                    selected: isSel,
-                    selectedColor: const Color(0xFFD4AF37),
-                    labelStyle: TextStyle(
-                      color: isSel ? Colors.black : Colors.white70,
-                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    backgroundColor: const Color(0xFF161821),
-                    onSelected: (val) {
-                      setState(() => _selectedCategory = cat);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      widget.isFavMode
-                          ? AppStrings.get('no_favs', widget.lang)
-                          : AppStrings.get('no_channels', widget.lang),
-                      style: const TextStyle(color: Colors.white54),
-                    ),
-                  )
-                : GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 220,
-                      childAspectRatio: 1.1,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
-                    itemCount: filtered.length,
-                    itemBuilder: (ctx, idx) {
-                      final ch = filtered[idx];
-                      return Focus(
-                        child: Builder(builder: (context) {
-                          final isFocused = Focus.of(context).hasFocus;
-                          return InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      VideoPlayerScreen(channel: ch),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF161821),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isFocused
-                                      ? const Color(0xFFD4AF37)
-                                      : Colors.white12,
-                                  width: isFocused ? 2.5 : 1,
-                                ),
-                              ),
-                              child: Stack(
-                                children: [
-                                  Center(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        if (ch.logo != null &&
-                                            ch.logo!.isNotEmpty)
-                                          CachedNetworkImage(
-                                            imageUrl: ch.logo!,
-                                            height: 50,
-                                            width: 50,
-                                            errorWidget: (_, __, ___) =>
-                                                const Icon(Icons.tv,
-                                                    size: 40,
-                                                    color: Color(0xFFD4AF37)),
-                                          )
-                                        else
-                                          const Icon(Icons.tv,
-                                              size: 40,
-                                              color: Color(0xFFD4AF37)),
-                                        const SizedBox(height: 8),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8.0),
-                                          child: Text(
-                                            ch.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            textAlign: TextAlign.center,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: IconButton(
-                                      icon: Icon(
-                                        ch.isFavorite
-                                            ? Icons.star
-                                            : Icons.star_border,
-                                        color: ch.isFavorite
-                                            ? Colors.amber
-                                            : Colors.white38,
-                                        size: 20,
-                                      ),
-                                      onPressed: () =>
-                                          widget.onToggleFav(ch),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 7. مشغل الفيديو فائق الفخامة والتحكم
-// ==========================================
-class VideoPlayerScreen extends StatefulWidget {
-  final Channel channel;
-  const VideoPlayerScreen({super.key, required this.channel});
-
-  @override
-  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
-}
-
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late VideoPlayerController _controller;
-  bool _hasError = false;
-  bool _showControls = true;
-
-  @override
-  void initState() {
-    super.initState();
-    WakelockPlus.enable();
-    _initPlayer();
-  }
-
-  void _initPlayer() {
-    setState(() {
-      _hasError = false;
-    });
-    _controller =
-        VideoPlayerController.networkUrl(Uri.parse(widget.channel.url))
-          ..initialize().then((_) {
-            setState(() {});
-            _controller.play();
-          }).catchError((err) {
-            setState(() {
-              _hasError = true;
-            });
-          });
-  }
-
-  @override
-  void dispose() {
-    WakelockPlus.disable();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: () => setState(() => _showControls = !_showControls),
-        child: Stack(
-          children: [
-            Center(
-              child: _hasError
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.redAccent, size: 48),
-                        const SizedBox(height: 12),
-                        const Text('تعذر تشغيل هذا البث المباشر',
-                            style: TextStyle(color: Colors.white70)),
-                        const SizedBox(height: 12),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD4AF37)),
-                          onPressed: _initPlayer,
-                          icon: const Icon(Icons.refresh, color: Colors.black),
-                          label: const Text('إعادة المحاولة',
-                              style: TextStyle(color: Colors.black)),
-                        )
-                      ],
-                    )
-                  : _controller.value.isInitialized
-                      ? AspectRatio(
-                          aspectRatio: _controller.value.aspectRatio,
-                          child: VideoPlayer(_controller),
-                        )
-                      : const CircularProgressIndicator(
-                          color: Color(0xFFD4AF37)),
-            ),
-            if (_showControls)
-              Container(
-                color: Colors.black38,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back,
-                              color: Colors.white, size: 28),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          widget.channel.name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      iconSize: 56,
-                      color: const Color(0xFFD4AF37),
-                      icon: Icon(
-                        _controller.value.isPlaying
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_filled,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _controller.value.isPlaying
-                              ? _controller.pause()
-                              : _controller.play();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+          const SizedBox(h
