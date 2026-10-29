@@ -9,15 +9,10 @@ import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-// ==========================================
-// 1. نماذج البيانات (Models)
-// ==========================================
+// ── 1. نموذج القناة ──
 class Channel {
-  final String id;
-  final String name;
-  final String url;
+  final String id, name, url, group;
   final String? logo;
-  final String group;
   bool isFavorite;
 
   Channel({
@@ -38,224 +33,57 @@ class Channel {
         'isFavorite': isFavorite,
       };
 
-  factory Channel.fromJson(Map<String, dynamic> json) => Channel(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        url: json['url'] as String,
-        logo: json['logo'] as String?,
-        group: json['group'] as String? ?? 'عام',
-        isFavorite: json['isFavorite'] as bool? ?? false,
+  factory Channel.fromJson(Map<String, dynamic> j) => Channel(
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        url: j['url'] ?? '',
+        logo: j['logo'],
+        group: j['group'] ?? 'عام',
+        isFavorite: j['isFavorite'] ?? false,
       );
 }
 
-// ==========================================
-// 2. معالج قوائم M3U (M3U Parser Service)
-// ==========================================
+// ── 2. محلل قوائم M3U ──
 class M3uService {
   static const _uuid = Uuid();
-
   static Future<List<Channel>> fetchAndParse(String url) async {
-    final response = await http.get(Uri.parse(url)).timeout(
-      const Duration(seconds: 30),
-      onTimeout: () => throw Exception('انتهت مهلة تحميل الرابط'),
-    );
+    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 30));
+    if (res.statusCode != 200) throw Exception('فشل جلب الرابط');
+    final lines = const LineSplitter().convert(utf8.decode(res.bodyBytes, allowMalformed: true));
+    final List<Channel> list = [];
+    String? name, logo;
+    String group = 'عام';
 
-    if (response.statusCode == 200) {
-      final decodedBody = utf8.decode(response.bodyBytes, allowMalformed: true);
-      return parse(decodedBody);
-    } else {
-      throw Exception('خطأ في الاتصال: كود ${response.statusCode}');
-    }
-  }
-
-  static List<Channel> parse(String content) {
-    final List<Channel> channels = [];
-    final lines = const LineSplitter().convert(content);
-
-    String? currentName;
-    String? currentLogo;
-    String currentGroup = 'عام';
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) continue;
-
-      if (line.startsWith('#EXTINF:')) {
-        final logoMatch = RegExp(r'tvg-logo="([^"]*)"').firstMatch(line);
-        currentLogo = logoMatch?.group(1);
-
-        final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(line);
-        currentGroup = groupMatch?.group(1) ?? 'عام';
-        if (currentGroup.isEmpty) currentGroup = 'عام';
-
-        final commaIndex = line.lastIndexOf(',');
-        if (commaIndex != -1 && commaIndex < line.length - 1) {
-          currentName = line.substring(commaIndex + 1).trim();
-        } else {
-          currentName = 'قناة';
-        }
-      } else if (!line.startsWith('#') &&
-          (line.startsWith('http://') ||
-              line.startsWith('https://') ||
-              line.startsWith('rtmp://'))) {
-        if (currentName != null) {
-          channels.add(
-            Channel(
-              id: _uuid.v4(),
-              name: currentName,
-              url: line,
-              logo: (currentLogo != null && currentLogo.isNotEmpty)
-                  ? currentLogo
-                  : null,
-              group: currentGroup,
-            ),
-          );
-        }
-        currentName = null;
-        currentLogo = null;
-        currentGroup = 'عام';
+    for (var l in lines) {
+      l = l.trim();
+      if (l.startsWith('#EXTINF:')) {
+        final lm = RegExp(r'tvg-logo="([^"]*)"').firstMatch(l);
+        logo = lm?.group(1);
+        final gm = RegExp(r'group-title="([^"]*)"').firstMatch(l);
+        group = gm?.group(1) ?? 'عام';
+        final c = l.lastIndexOf(',');
+        name = c != -1 ? l.substring(c + 1).trim() : 'قناة';
+      } else if (!l.startsWith('#') && (l.startsWith('http://') || l.startsWith('https://'))) {
+        if (name != null) list.add(Channel(id: _uuid.v4(), name: name, url: l, logo: logo, group: group));
+        name = null; logo = null; group = 'عام';
       }
     }
-    return channels;
+    return list;
   }
 }
 
-// ==========================================
-// 3. نظام الترجمة المدمج (Localizations)
-// ==========================================
-class AppStrings {
-  static final Map<String, Map<String, String>> _values = {
-    'ar': {
-      'app_title': 'Heedar TV',
-      'home': 'الرئيسية',
-      'live_tv': 'بث مباشر',
-      'favorites': 'المفضلة',
-      'sources': 'المصادر',
-      'settings': 'الإعدادات',
-      'all': 'الكل',
-      'search': 'ابحث عن اسم القناة...',
-      'channels_count': 'إجمالي القنوات',
-      'sources_count': 'المصادر المضافة',
-      'favs_count': 'المفضلة',
-      'welcome_msg': 'بوابتك الفاخرة للبث التلفزيوني بجودة عالية',
-      'add_source': 'إضافة قائمة M3U جديدة',
-      'source_name': 'اسم القائمة (مثال: قنواتي)',
-      'source_url': 'رابط M3U أو M3U8 مباشر',
-      'save': 'حفظ وإضافة',
-      'cancel': 'إلغاء',
-      'delete': 'حذف',
-      'no_channels': 'لا توجد قنوات. أضف مصدراً من قسم المصادر.',
-      'no_favs': 'قائمتك المفضلة فارغة حالياً.',
-      'loading': 'جاري استيراد القنوات...',
-      'success': 'تم استيراد القنوات بنجاح',
-      'error': 'تعذر جلب المصدر، يرجى فحص الرابط',
-      'lang': 'لغة التطبيق',
-      'clear_cache': 'مسح القنوات والذاكرة المؤقتة',
-      'player_settings': 'إعدادات المشغل',
-      'aspect_ratio': 'أبعاد الشاشة الافتراضية',
-      'keep_awake': 'إبقاء الشاشة مضاءة أثناء البث',
-      'tv_mode': 'وضع شاشات Android TV وتحديد الريموت',
-      'about': 'حول التطبيق',
-      'version_info': 'النسخة الفاخرة 1.2 — للهواتف وشاشات التلفزيون',
-      'confirm_clear': 'هل أنت متأكد من مسح جميع القنوات؟',
-      'cleared_msg': 'تم مسح جميع البيانات والقنوات بنجاح',
-    },
-    'en': {
-      'app_title': 'Heedar TV',
-      'home': 'Home',
-      'live_tv': 'Live TV',
-      'favorites': 'Favorites',
-      'sources': 'Sources',
-      'settings': 'Settings',
-      'all': 'All',
-      'search': 'Search channel name...',
-      'channels_count': 'Total Channels',
-      'sources_count': 'Total Sources',
-      'favs_count': 'Favorites',
-      'welcome_msg': 'Your premium live streaming gateway',
-      'add_source': 'Add New M3U Playlist',
-      'source_name': 'Playlist Name',
-      'source_url': 'Direct M3U / M3U8 URL',
-      'save': 'Save & Import',
-      'cancel': 'Cancel',
-      'delete': 'Delete',
-      'no_channels': 'No channels found. Add a source first.',
-      'no_favs': 'Your favorites list is empty.',
-      'loading': 'Importing channels...',
-      'success': 'Channels imported successfully',
-      'error': 'Failed to import source. Check URL.',
-      'lang': 'App Language',
-      'clear_cache': 'Clear Cached Channels',
-      'player_settings': 'Player Settings',
-      'aspect_ratio': 'Default Screen Aspect Ratio',
-      'keep_awake': 'Keep Screen Awake during stream',
-      'tv_mode': 'Android TV Remote Highlight Mode',
-      'about': 'About Heedar TV',
-      'version_info': 'Luxury Edition 1.2 — Phones & TV Screens',
-      'confirm_clear': 'Are you sure you want to clear all channels?',
-      'cleared_msg': 'All channels cleared successfully',
-    }
-  };
+// ── 3. مشغل التطبيق والثيم الفاخر ──
+void main() => runApp(const HeedarTvApp());
 
-  static String get(String key, String lang) {
-    return _values[lang]?[key] ?? _values['ar']![key] ?? key;
-  }
-}
-
-// ==========================================
-// 4. التطبيق الرئيسي والثيم الفاخر
-// ==========================================
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const HeedarTvApp());
-}
-
-class HeedarTvApp extends StatefulWidget {
+class HeedarTvApp extends StatelessWidget {
   const HeedarTvApp({super.key});
-
-  static void setLocale(BuildContext context, String lang) {
-    final state = context.findAncestorStateOfType<_HeedarTvAppState>();
-    state?.changeLanguage(lang);
-  }
-
-  @override
-  State<HeedarTvApp> createState() => _HeedarTvAppState();
-}
-
-class _HeedarTvAppState extends State<HeedarTvApp> {
-  String _currentLocale = 'ar';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadLang();
-  }
-
-  void _loadLang() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentLocale = prefs.getString('app_lang') ?? 'ar';
-    });
-  }
-
-  void changeLanguage(String lang) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('app_lang', lang);
-    setState(() {
-      _currentLocale = lang;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
-    const goldPrimary = Color(0xFFD4AF37);
-    const bgDark = Color(0xFF0D0E12);
-    const cardDark = Color(0xFF161821);
-
     return MaterialApp(
       title: 'Heedar TV',
       debugShowCheckedModeBanner: false,
-      locale: Locale(_currentLocale),
+      locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -264,771 +92,327 @@ class _HeedarTvAppState extends State<HeedarTvApp> {
       ],
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: bgDark,
-        primaryColor: goldPrimary,
+        scaffoldBackgroundColor: const Color(0xFF0A0C10),
+        primaryColor: const Color(0xFFD4AF37),
         fontFamily: 'sans-serif',
-        colorScheme: const ColorScheme.dark(
-          primary: goldPrimary,
-          secondary: Color(0xFFFFD700),
-          surface: cardDark,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: bgDark,
-          elevation: 0,
-        ),
       ),
-      home: MainShellScreen(currentLang: _currentLocale),
+      home: const HeedarTvDirectScreen(),
     );
   }
 }
 
-// ==========================================
-// 5. الشاشة الرئيسية والهيكل العام
-// ==========================================
-class MainShellScreen extends StatefulWidget {
-  final String currentLang;
-  const MainShellScreen({super.key, required this.currentLang});
-
+// ── 4. الواجهة الموحدة والمباشرة (Heedar TV System) ──
+class HeedarTvDirectScreen extends StatefulWidget {
+  const HeedarTvDirectScreen({super.key});
   @override
-  State<MainShellScreen> createState() => _MainShellScreenState();
+  State<HeedarTvDirectScreen> createState() => _HeedarTvDirectScreenState();
 }
 
-class _MainShellScreenState extends State<MainShellScreen> {
-  int _selectedIndex = 0;
+class _HeedarTvDirectScreenState extends State<HeedarTvDirectScreen> {
   List<Channel> _channels = [];
-  final List<Map<String, String>> _sources = [];
-  bool _isLoading = false;
-
-  String _aspectRatioMode = '16:9';
-  bool _keepAwake = true;
-  bool _tvFocusHighlight = true;
+  Channel? _activeChannel;
+  VideoPlayerController? _player;
+  String _selectedCategory = 'الكل';
+  String _search = '';
+  bool _isFullscreen = false;
+  bool _showControls = true;
+  bool _loading = false;
+  String _ratio = '16:9';
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _loadPreferences();
-  }
-
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _aspectRatioMode = prefs.getString('pref_aspect_ratio') ?? '16:9';
-      _keepAwake = prefs.getBool('pref_keep_awake') ?? true;
-      _tvFocusHighlight = prefs.getBool('pref_tv_highlight') ?? true;
-    });
-  }
-
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedSources = prefs.getStringList('tv_sources') ?? [];
-    final savedFavs = prefs.getStringList('tv_favorites') ?? [];
-
-    setState(() {
-      _sources.clear();
-      for (var s in savedSources) {
-        _sources.add(Map<String, String>.from(jsonDecode(s)));
-      }
-    });
-
-    final cachedJson = prefs.getString('tv_channels');
-    if (cachedJson != null) {
-      final List dec = jsonDecode(cachedJson);
-      setState(() {
-        _channels = dec.map((c) {
-          final ch = Channel.fromJson(c);
-          ch.isFavorite = savedFavs.contains(ch.url);
-          return ch;
-        }).toList();
-      });
-    }
-  }
-
-  Future<void> _saveChannels(List<Channel> list) async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = jsonEncode(list.map((e) => e.toJson()).toList());
-    await prefs.setString('tv_channels', jsonStr);
-  }
-
-  Future<void> _addSource(String name, String url) async {
-    setState(() => _isLoading = true);
-    try {
-      final parsedChannels = await M3uService.fetchAndParse(url);
-      final prefs = await SharedPreferences.getInstance();
-
-      final sourceObj = {'name': name, 'url': url};
-      _sources.add(sourceObj);
-
-      await prefs.setStringList(
-          'tv_sources', _sources.map((e) => jsonEncode(e)).toList());
-
-      final updatedChannels = [..._channels, ...parsedChannels];
-      setState(() {
-        _channels = updatedChannels;
-      });
-      await _saveChannels(updatedChannels);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                '${AppStrings.get('success', widget.currentLang)} (+${parsedChannels.length})'),
-            backgroundColor: const Color(0xFFD4AF37),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppStrings.get('error', widget.currentLang)}: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _toggleFav(Channel ch) async {
-    setState(() {
-      ch.isFavorite = !ch.isFavorite;
-    });
-    final prefs = await SharedPreferences.getInstance();
-    final favList =
-        _channels.where((c) => c.isFavorite).map((c) => c.url).toList();
-    await prefs.setStringList('tv_favorites', favList);
-  }
-
-  void _clearAllChannels() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('tv_channels');
-    await prefs.remove('tv_sources');
-    await prefs.remove('tv_favorites');
-    setState(() {
-      _channels.clear();
-      _sources.clear();
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppStrings.get('cleared_msg', widget.currentLang)),
-          backgroundColor: const Color(0xFFD4AF37),
-        ),
-      );
-    }
+    try { WakelockPlus.enable(); } catch (_) {}
+    _loadChannels();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final isArabic = widget.currentLang == 'ar';
-    final lang = widget.currentLang;
+  void dispose() {
+    _player?.dispose();
+    try { WakelockPlus.disable(); } catch (_) {}
+    super.dispose();
+  }
 
-    final pages = [
-      _buildHomeView(lang),
-      _buildChannelsView(lang, false),
-      _buildChannelsView(lang, true),
-      _buildSourcesView(lang),
-      _buildSettingsView(lang),
-    ];
+  Future<void> _loadChannels() async {
+    final p = await SharedPreferences.getInstance();
+    final data = p.getString('cached_channels');
+    final favs = p.getStringList('fav_urls') ?? [];
+    if (data != null) {
+      final List dec = jsonDecode(data);
+      setState(() {
+        _channels = dec.map((e) {
+          final c = Channel.fromJson(e);
+          c.isFavorite = favs.contains(c.url);
+          return c;
+        }).toList();
+        if (_channels.isNotEmpty && _activeChannel == null) {
+          _playChannel(_channels.first);
+        }
+      });
+    }
+  }
 
-    return Scaffold(
-      body: Row(
-        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-        children: [
-          Container(
-            color: const Color(0xFF111218),
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height,
-                ),
-                child: IntrinsicHeight(
-                  child: NavigationRail(
-                    backgroundColor: Colors.transparent,
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: (val) =>
-                        setState(() => _selectedIndex = val),
-                    labelType: NavigationRailLabelType.all,
-                    selectedIconTheme: const IconThemeData(
-                        color: Color(0xFFD4AF37), size: 28),
-                    unselectedIconTheme:
-                        const IconThemeData(color: Colors.white54, size: 24),
-                    selectedLabelTextStyle: const TextStyle(
-                        color: Color(0xFFD4AF37),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11),
-                    unselectedLabelTextStyle:
-                        const TextStyle(color: Colors.white54, fontSize: 10),
-                    leading: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14.0),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: const Color(0xFFD4AF37), width: 1.5),
-                        ),
-                        child: const Icon(Icons.tv,
-                            color: Color(0xFFD4AF37), size: 26),
-                      ),
-                    ),
-                    destinations: [
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.home_outlined),
-                        selectedIcon: const Icon(Icons.home),
-                        label: Text(AppStrings.get('home', lang)),
-                      ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.live_tv_outlined),
-                        selectedIcon: const Icon(Icons.live_tv),
-                        label: Text(AppStrings.get('live_tv', lang)),
-                      ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.star_border),
-                        selectedIcon: const Icon(Icons.star),
-                        label: Text(AppStrings.get('favorites', lang)),
-                      ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.cloud_download_outlined),
-                        selectedIcon: const Icon(Icons.cloud_download),
-                        label: Text(AppStrings.get('sources', lang)),
-                      ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.settings_outlined),
-                        selectedIcon: const Icon(Icons.settings),
-                        label: Text(AppStrings.get('settings', lang)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+  Future<void> _saveChannels() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString('cached_channels', jsonEncode(_channels.map((e) => e.toJson()).toList()));
+    await p.setStringList('fav_urls', _channels.where((e) => e.isFavorite).map((e) => e.url).toList());
+  }
+
+  void _playChannel(Channel ch) {
+    setState(() {
+      _activeChannel = ch;
+      _loading = true;
+    });
+    _player?.dispose();
+    _player = VideoPlayerController.networkUrl(Uri.parse(ch.url))
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() => _loading = false);
+          _player?.play();
+        }
+      }).catchError((_) {
+        if (mounted) setState(() => _loading = false);
+      });
+  }
+
+  void _addM3uDialog() {
+    final n = TextEditingController(), u = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161821),
+        title: const Text('إضافة رابط M3U — Heedar TV', style: TextStyle(color: Color(0xFFD4AF37))),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: n, decoration: const InputDecoration(labelText: 'اسم الباقة')),
+            TextField(controller: u, decoration: const InputDecoration(labelText: 'رابط M3U أو M3U8')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+            onPressed: () async {
+              if (u.text.trim().isNotEmpty) {
+                Navigator.pop(ctx);
+                setState(() => _loading = true);
+                try {
+                  final list = await M3uService.fetchAndParse(u.text.trim());
+                  _channels.addAll(list);
+                  await _saveChannels();
+                  if (_channels.isNotEmpty && _activeChannel == null) _playChannel(_channels.first);
+                } catch (_) {}
+                if (mounted) setState(() => _loading = false);
+              }
+            },
+            child: const Text('استيراد'),
           ),
-          const VerticalDivider(width: 1, thickness: 1, color: Colors.white12),
-          Expanded(child: pages[_selectedIndex]),
         ],
       ),
     );
   }
 
-  Widget _buildHomeView(String lang) {
-    final favCount = _channels.where((c) => c.isFavorite).length;
-
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: ListView(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF222634), Color(0xFF13151D)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'HEEDAR TV — LUXURY',
-                        style: TextStyle(
-                          color: Color(0xFFD4AF37),
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        AppStrings.get('welcome_msg', lang),
-                        style:
-                            const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4AF37),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                  ),
-                  onPressed: () => setState(() => _selectedIndex = 1),
-                  icon: const Icon(Icons.play_circle_fill),
-                  label: Text(AppStrings.get('live_tv', lang),
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
+  void _settingsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          backgroundColor: const Color(0xFF161821),
+          title: const Text('الإعدادات — Heedar TV', style: TextStyle(color: Color(0xFFD4AF37))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildStatCard(AppStrings.get('channels_count', lang),
-                  '${_channels.length}', Icons.tv, Colors.blueAccent),
-              const SizedBox(width: 16),
-              _buildStatCard(AppStrings.get('sources_count', lang),
-                  '${_sources.length}', Icons.source, Colors.amber),
-              const SizedBox(width: 16),
-              _buildStatCard(AppStrings.get('favs_count', lang), '$favCount',
-                  Icons.star, Colors.redAccent),
+              ListTile(
+                title: const Text('أبعاد المشغل'),
+                trailing: DropdownButton<String>(
+                  dropdownColor: const Color(0xFF161821),
+                  value: _ratio,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(value: '16:9', child: Text('16:9')),
+                    DropdownMenuItem(value: '4:3', child: Text('4:3')),
+                    DropdownMenuItem(value: 'auto', child: Text('تلقائي')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() => _ratio = v);
+                      setD(() => _ratio = v);
+                    }
+                  },
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                title: const Text('مسح القنوات والبدء من جديد'),
+                onTap: () async {
+                  final p = await SharedPreferences.getInstance();
+                  await p.remove('cached_channels');
+                  await p.remove('fav_urls');
+                  _player?.pause();
+                  _player?.dispose();
+                  setState(() {
+                    _channels.clear();
+                    _activeChannel = null;
+                    _player = null;
+                  });
+                  if (mounted) Navigator.pop(ctx);
+                },
+              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-      String title, String count, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF161821),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.15),
-              radius: 24,
-              child: Icon(icon, color: color),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إغلاق'),
             ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(count,
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                Text(title,
-                    style:
-                        const TextStyle(fontSize: 12, color: Colors.white54)),
-              ],
-            )
           ],
         ),
       ),
     );
   }
 
-  Widget _buildChannelsView(String lang, bool onlyFavs) {
-    return _ChannelExplorer(
-      channels:
-          onlyFavs ? _channels.where((c) => c.isFavorite).toList() : _channels,
-      isFavMode: onlyFavs,
-      lang: lang,
-      aspectRatio: _aspectRatioMode,
-      keepAwake: _keepAwake,
-      onToggleFav: _toggleFav,
-    );
+  double _getRatio() {
+    if (_ratio == '16:9') return 16 / 9;
+    if (_ratio == '4:3') return 4 / 3;
+    return (_player != null && _player!.value.isInitialized) ? _player!.value.aspectRatio : 16 / 9;
   }
-
-  Widget _buildSourcesView(String lang) {
-    final nameCtrl = TextEditingController();
-    final urlCtrl = TextEditingController();
-
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                AppStrings.get('sources', lang),
-                style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFD4AF37)),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFD4AF37),
-                  foregroundColor: Colors.black,
-                ),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: const Color(0xFF1A1D27),
-                      title: Text(AppStrings.get('add_source', lang)),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: nameCtrl,
-                            decoration: InputDecoration(
-                              labelText: AppStrings.get('source_name', lang),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: urlCtrl,
-                            decoration: InputDecoration(
-                              labelText: AppStrings.get('source_url', lang),
-                            ),
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(AppStrings.get('cancel', lang)),
-                        ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD4AF37)),
-                          onPressed: () {
-                            if (urlCtrl.text.trim().isNotEmpty) {
-                              Navigator.pop(ctx);
-                              _addSource(
-                                nameCtrl.text.trim().isEmpty
-                                    ? 'قائمة'
-                                    : nameCtrl.text.trim(),
-                                urlCtrl.text.trim(),
-                              );
-                            }
-                          },
-                          child: Text(AppStrings.get('save', lang),
-                              style: const TextStyle(color: Colors.black)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add),
-                label: Text(AppStrings.get('add_source', lang)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32.0),
-                child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
-              ),
-            )
-          else if (_sources.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 60.0),
-                child: Text(AppStrings.get('no_channels', lang),
-                    style: const TextStyle(color: Colors.white54)),
-              ),
-            )
-          else
-            Expanded(
-              child: ListView.builder(
-                itemCount: _sources.length,
-                itemBuilder: (ctx, idx) {
-                  final s = _sources[idx];
-                  return Card(
-                    color: const Color(0xFF161821),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      leading:
-                          const Icon(Icons.link, color: Color(0xFFD4AF37)),
-                      title: Text(s['name'] ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(s['url'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white38)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: () async {
-                          setState(() {
-                            _sources.removeAt(idx);
-                          });
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setStringList('tv_sources',
-                              _sources.map((e) => jsonEncode(e)).toList());
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsView(String lang) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: ListView(
-        children: [
-          Text(
-            AppStrings.get('settings', lang),
-            style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFD4AF37)),
-          ),
-          const SizedBox(height: 20),
-          _buildSettingsHeader(AppStrings.get('lang', lang), Icons.language),
-          ListTile(
-            tileColor: const Color(0xFF161821),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Text('اللغة / Language'),
-            trailing: DropdownButton<String>(
-              dropdownColor: const Color(0xFF1E212D),
-              value: lang,
-              underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 'ar', child: Text('العربية 🇸🇦')),
-                DropdownMenuItem(value: 'en', child: Text('English 🇺🇸')),
-              ],
-              onChanged: (val) {
-                if (val != null) {
-                  HeedarTvApp.setLocale(context, val);
-                }
-              },
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildSettingsHeader(
-              AppStrings.get('player_settings', lang), Icons.play_circle_fill),
-          ListTile(
-            tileColor: const Color(0xFF161821),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: Text(AppStrings.get('aspect_ratio', lang)),
-            trailing: DropdownButton<String>(
-              dropdownColor: const Color(0xFF1E212D),
-              value: _aspectRatioMode,
-              underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: '16:9', child: Text('16:9 (عريض)')),
-                DropdownMenuItem(value: '4:3', child: Text('4:3 (كلاسيكي)')),
-                DropdownMenuItem(value: 'auto', child: Text('تلقائي (Auto)')),
-              ],
-              onChanged: (val) async {
-                if (val != null) {
-                  setState(() => _aspectRatioMode = val);
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('pref_aspect_ratio', val);
-                }
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            tileColor: const Color(0xFF161821),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            activeColor: const Color(0xFFD4AF37),
-            title: Text(AppStrings.get('keep_awake', lang)),
-            subtitle: const Text('منع إطفاء الشاشة عند المشاهدة',
-                style: TextStyle(fontSize: 12, color: Colors.white54)),
-            value: _keepAwake,
-            onChanged: (val) async {
-              setState(() => _keepAwake = val);
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('pref_keep_awake', val);
-            },
-          ),
-          const SizedBox(height: 20),
-          _buildSettingsHeader('أجهزة التلفزيون والريموت', Icons.tv),
-          SwitchListTile(
-            tileColor: const Color(0xFF161821),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            activeColor: const Color(0xFFD4AF37),
-            title: Text(AppStrings.get('tv_mode', lang)),
-            subtitle: const Text('إظهار إطار ذهبي مضيء على القناة المحددة',
-                style: TextStyle(fontSize: 12, color: Colors.white54)),
-            value: _tvFocusHighlight,
-            onChanged: (val) async {
-              setState(() => _tvFocusHighlight = val);
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('pref_tv_highlight', val);
-            },
-          ),
-          const SizedBox(height: 20),
-          _buildSettingsHeader('إدارة البيانات', Icons.storage),
-          ListTile(
-            tileColor: const Color(0xFF161821),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
-            title: Text(AppStrings.get('clear_cache', lang)),
-            subtitle: Text('عدد القنوات المحفوظة: ${_channels.length}',
-                style: const TextStyle(fontSize: 12, color: Colors.white54)),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  backgroundColor: const Color(0xFF1A1D27),
-                  title: const Text('تأكيد المسح'),
-                  content: Text(AppStrings.get('confirm_clear', lang)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(AppStrings.get('cancel', lang)),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _clearAllChannels();
-                      },
-                      child: Text(AppStrings.get('delete', lang),
-                          style: const TextStyle(color: Colors.white)),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          _buildSettingsHeader(AppStrings.get('about', lang), Icons.info_outline),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF161821),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: const Color(0xFFD4AF37).withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.verified,
-                    color: Color(0xFFD4AF37), size: 36),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('HEEDAR TV — LUXURY',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: Color(0xFFD4AF37))),
-                    const SizedBox(height: 4),
-                    Text(AppStrings.get('version_info', lang),
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.white54)),
-                  ],
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFFD4AF37), size: 18),
-          const SizedBox(width: 8),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70)),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 6. مستعرض القنوات وتصفيتها حسب الفئة والبحث
-// ==========================================
-class _ChannelExplorer extends StatefulWidget {
-  final List<Channel> channels;
-  final bool isFavMode;
-  final String lang;
-  final String aspectRatio;
-  final bool keepAwake;
-  final Function(Channel) onToggleFav;
-
-  const _ChannelExplorer({
-    required this.channels,
-    required this.isFavMode,
-    required this.lang,
-    required this.aspectRatio,
-    required this.keepAwake,
-    required this.onToggleFav,
-  });
-
-  @override
-  State<_ChannelExplorer> createState() => _ChannelExplorerState();
-}
-
-class _ChannelExplorerState extends State<_ChannelExplorer> {
-  String _selectedCategory = 'الكل';
-  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
-    final categories = [
-      'الكل',
-      ...widget.channels.map((c) => c.group).toSet()
-    ];
-
-    final filtered = widget.channels.where((c) {
-      final matchesCat =
-          (_selectedCategory == 'الكل' || c.group == _selectedCategory);
-      final matchesSearch =
-          c.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      return matchesCat && matchesSearch;
-    }).toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          Row(
+    if (_isFullscreen) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onTap: () => setState(() => _showControls = !_showControls),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                  decoration: InputDecoration(
-                    hintText: AppStrings.get('search', widget.lang),
-                    prefixIcon:
-                        const Icon(Icons.search, color: Color(0xFFD4AF37)),
-                    filled: true,
-                    fillColor: const Color(0xFF161821),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+              Center(
+                child: _player != null && _player!.value.isInitialized
+                    ? AspectRatio(aspectRatio: _getRatio(), child: VideoPlayer(_player!))
+                    : const CircularProgressIndicator(color: Color(0xFFD4AF37)),
+              ),
+              if (_showControls)
+                SafeArea(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    color: Colors.black45,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.fullscreen_exit, size: 30, color: Color(0xFFD4AF37)),
+                              onPressed: () => setState(() => _isFullscreen = false),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(_activeChannel?.name ?? 'Heedar TV', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.tune, color: Colors.white),
+                              onPressed: _settingsDialog,
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Center(
+                          child: IconButton(
+                            iconSize: 64,
+                            color: const Color(0xFFD4AF37),
+                            icon: Icon(_player != null && _player!.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+                            onPressed: () => setState(() => _player!.value.isPlaying ? _player!.pause() : _player!.play()),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                     ),
                   ),
                 ),
-              ),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
-              itemBuilder: (ctx, i) {
+        ),
+      );
+    }
+
+    // ── الواجهة المباشرة (قنوات + بث فوري بجانبها) ──
+    final categories = ['الكل', 'المفضلة', ..._channels.map((e) => e.group).toSet()];
+    final filtered = _channels.where((c) {
+      final mCat = _selectedCategory == 'الكل'
+          ? true
+          : (_selectedCategory == 'المفضلة' ? c.isFavorite : c.group == _selectedCategory);
+      final mQ = c.name.toLowerCase().contains(_search.toLowerCase());
+      return mCat && mQ;
+    }).toList();
+
+    return Scaffold(
+      body: Row(
+        children: [
+          // 1. شريط الأيقونات السريع
+          Container(
+            width: 58,
+            color: const Color(0xFF0F1117),
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 28),
+                const Divider(color: Colors.white12, height: 28),
+                IconButton(
+                  tooltip: 'إضافة M3U',
+                  icon: const Icon(Icons.add_circle_outline, color: Color(0xFFD4AF37)),
+                  onPressed: _addM3uDialog,
+                ),
+                IconButton(
+                  tooltip: 'المفضلة',
+                  icon: Icon(Icons.star, color: _selectedCategory == 'المفضلة' ? Colors.amber : Colors.white54),
+                  onPressed: () => setState(() => _selectedCategory = 'المفضلة'),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'الإعدادات',
+                  icon: const Icon(Icons.settings, color: Colors.white54),
+                  onPressed: _settingsDialog,
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+
+          // 2. قائمة القنوات والتصنيفات (Heedar TV List)
+          Expanded(
+            flex: 4,
+            child: Container(
+              color: const Color(0xFF12151D),
+              child: Column(
+                children: [
+                  // شريط البحث
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+                    child: TextField(
+                      onChanged: (v) => setState(() => _search = v),
+                      decoration: InputDecoration(
+                        hintText: 'بحث في Heedar TV...',
+                        prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFFD4AF37)),
+                        filled: true,
+                        fillColor: const Color(0xFF1B1E29),
+                        isDense: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                    ),
+                  ),
+
+                  // شريط الفئات
+                  SizedBox(
+                    height: 38,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: categories.length,
+                      itemBuilder: (_, i) {
+                        final cat = categories[i];
+                        final isSel = cat == _selectedCategory;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                          child: ChoiceChip(
+                            label: Text(cat, style: TextStyle(fontSize: 11, color: isSel ? Colors.black : Colors.white)),
