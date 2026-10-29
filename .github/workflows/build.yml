@@ -27,21 +27,20 @@ jobs:
           # 3. فك التطبيق
           java -jar apktool.jar d -s -f owntv.apk -o owntv_decompiled
           
-          # 4. التعديل: كتابة HEEDAR ذهبية واحدة وحماية زر التشغيل
-          python3 -c "
+          # 4. كتابة كود التعديل في ملف بايثون مستقل لتفادي أي خطأ تنصيص
+          cat << 'EOF' > modify.py
           import os, re
           res_dir = 'owntv_decompiled/res'
 
-          # رسمة فيكتور ذهبية لكلمة HEEDAR بصبغة #D4AF37
-          gold_vector = '''<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"
-              android:width=\"135dp\"
-              android:height=\"30dp\"
-              android:viewportWidth=\"270\"
-              android:viewportHeight=\"60\"
-              android:tint=\"#D4AF37\">
+          gold_vector = '''<vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="135dp"
+              android:height="30dp"
+              android:viewportWidth="270"
+              android:viewportHeight="60"
+              android:tint="#D4AF37">
               <path
-                  android:fillColor=\"#D4AF37\"
-                  android:pathData=\"M10,10 L18,10 L18,26 L32,26 L32,10 L40,10 L40,50 L32,50 L32,34 L18,34 L18,50 L10,50 Z M50,10 L80,10 L80,18 L59,18 L59,26 L76,26 L76,34 L59,34 L59,42 L80,42 L80,50 L50,50 Z M90,10 L120,10 L120,18 L99,18 L99,26 L116,26 L116,34 L99,34 L99,42 L120,42 L120,50 L90,50 Z M130,10 L152,10 C162,10 168,16 168,30 C168,44 162,50 152,50 L130,50 Z M139,18 L139,42 L150,42 C156,42 159,38 159,30 C159,22 156,18 150,18 Z M175,50 L189,10 L199,10 L213,50 L204,50 L200,38 L188,38 L184,50 Z M190,31 L198,31 L194,19 Z M223,10 L246,10 C254,10 259,14 259,23 C259,30 255,34 248,35 L260,50 L250,50 L239,36 L232,36 L232,50 L223,50 Z M232,18 L232,29 L244,29 C248,29 250,27 250,23 C250,19 248,18 244,18 Z\" />
+                  android:fillColor="#D4AF37"
+                  android:pathData="M10,10 L18,10 L18,26 L32,26 L32,10 L40,10 L40,50 L32,50 L32,34 L18,34 L18,50 L10,50 Z M50,10 L80,10 L80,18 L59,18 L59,26 L76,26 L76,34 L59,34 L59,42 L80,42 L80,50 L50,50 Z M90,10 L120,10 L120,18 L99,18 L99,26 L116,26 L116,34 L99,34 L99,42 L120,42 L120,50 L90,50 Z M130,10 L152,10 C162,10 168,16 168,30 C168,44 162,50 152,50 L130,50 Z M139,18 L139,42 L150,42 C156,42 159,38 159,30 C159,22 156,18 150,18 Z M175,50 L189,10 L199,10 L213,50 L204,50 L200,38 L188,38 L184,50 Z M190,31 L198,31 L194,19 Z M223,10 L246,10 C254,10 259,14 259,23 C259,30 255,34 248,35 L260,50 L250,50 L239,36 L232,36 L232,50 L223,50 Z M232,18 L232,29 L244,29 C248,29 250,27 250,23 C250,19 248,18 244,18 Z" />
           </vector>'''
 
           for root, _, files in os.walk(res_dir):
@@ -49,9 +48,43 @@ jobs:
                   p = os.path.join(root, f)
                   low = f.lower()
 
-                  # نصوص التطبيق
+                  # تعديل النصوص في strings.xml
                   if f == 'strings.xml':
                       with open(p, 'r', encoding='utf-8', errors='ignore') as fp:
                           c = fp.read()
                       def repl(m):
                           val = m.group(1)
+                          if not val.strip().startswith('@'):
+                              val = val.replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV').replace('OWNTV', 'Heedar TV')
+                          return '>' + val + '<'
+                      c2 = re.sub(r'>([^<]+)<', repl, c)
+                      if c2 != c:
+                          with open(p, 'w', encoding='utf-8') as fp:
+                              fp.write(c2)
+
+                  # تعديل اللوجو فقط وحماية زر التشغيل
+                  if 'wordmark' in low and f.endswith('.xml'):
+                      with open(p, 'w', encoding='utf-8') as fp:
+                          fp.write(gold_vector)
+          EOF
+
+          python3 modify.py
+          
+          # 5. تحويل اللون السماوي إلى ذهبي ملكي #D4AF37
+          find owntv_decompiled/res/values* -name "colors.xml" -exec sed -i 's/#26C6DA/#D4AF37/gI' {} +
+          find owntv_decompiled/res/values* -name "colors.xml" -exec sed -i 's/#00B0FF/#D4AF37/gI' {} +
+          find owntv_decompiled/res/values* -name "colors.xml" -exec sed -i 's/#80DEEA/#FFD700/gI' {} +
+          find owntv_decompiled/res/values* -name "colors.xml" -exec sed -i 's/#00E5FF/#D4AF37/gI' {} +
+          
+          sed -i 's/android:label="OwnTV"/android:label="Heedar TV"/g' owntv_decompiled/AndroidManifest.xml || true
+          
+          # 6. تجميع وتوقيع التطبيق رسمياً
+          java -jar apktool.jar b owntv_decompiled -o heedar_unsigned.apk
+          java -jar signer.jar -a heedar_unsigned.apk --allowResign -o output/
+          mv output/*.apk HeedarTV-APK.apk
+
+      - name: Upload Heedar TV APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeedarTV-APK
+          path: HeedarTV-APK.apk
