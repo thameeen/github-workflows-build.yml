@@ -1,210 +1,33 @@
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:uuid/uuid.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  WakelockPlus.enable();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
-  runApp(const HeedarTVApp());
-}
-
-// ───────────────────── Localization ─────────────────────
-class AppLocalizations {
-  final Locale locale;
-  AppLocalizations(this.locale);
-
-  static AppLocalizations of(BuildContext context) =>
-      Localizations.of<AppLocalizations>(context, AppLocalizations)!;
-
-  static const LocalizationsDelegate<AppLocalizations> delegate =
-      _AppLocDelegate();
-
-  static final Map<String, Map<String, String>> _v = {
-    'ar': {
-      'appName': 'Heedar TV',
-      'home': 'الرئيسية',
-      'live': 'بث مباشر',
-      'movies': 'أفلام',
-      'series': 'مسلسلات',
-      'sources': 'المصادر',
-      'settings': 'الإعدادات',
-      'searchChannel': 'ابحث عن قناة...',
-      'all': 'الكل',
-      'favorites': 'المفضلة',
-      'noChannels': 'لا توجد قنوات',
-      'noResults': 'لا توجد نتائج',
-      'importM3U': 'استيراد M3U',
-      'liveTV': 'البث المباشر',
-      'chooseChannel': 'اختر قناة للبدء',
-      'connecting': 'جاري الاتصال بالبث...',
-      'playbackError': 'تعذر تشغيل هذا البث',
-      'retry': 'إعادة المحاولة',
-      'importPlaylist': 'استيراد قائمة M3U / M3U8',
-      'importNote':
-          'أضف قوائم M3U من مصادر تملك حق استخدامها.\nالتطبيق لا يأتي بقنوات جاهزة.',
-      'startImport': 'بدء الاستيراد',
-      'downloading': 'جاري التنزيل...',
-      'parsing': 'جاري التحليل...',
-      'importSuccess': 'تم استيراد',
-      'channels': 'قناة',
-      'newChannels': 'قناة جديدة',
-      'importFailed': 'فشل: تأكد من الرابط',
-      'currentChannels': 'القنوات الحالية',
-      'savedLocally': 'يتم حفظ المصادر محليًا.',
-      'noMovies': 'لا توجد أفلام بعد.\nأضف مصدر VOD لاحقًا.',
-      'noSeries': 'لا توجد مسلسلات بعد.\nأضف مصدر VOD لاحقًا.',
-      'language': 'اللغة',
-      'arabic': 'العربية',
-      'english': 'English',
-      'manageSources': 'إدارة المصادر',
-      'clearChannels': 'مسح كل القنوات',
-      'version': 'نسخة فاخرة 1.1 — هواتف وشاشات TV',
-      'close': 'إغلاق',
-      'cancel': 'إلغاء',
-    },
-    'en': {
-      'appName': 'Heedar TV',
-      'home': 'Home',
-      'live': 'Live TV',
-      'movies': 'Movies',
-      'series': 'Series',
-      'sources': 'Sources',
-      'settings': 'Settings',
-      'searchChannel': 'Search channels...',
-      'all': 'All',
-      'favorites': 'Favorites',
-      'noChannels': 'No channels',
-      'noResults': 'No results',
-      'importM3U': 'Import M3U',
-      'liveTV': 'Live TV',
-      'chooseChannel': 'Select a channel to start',
-      'connecting': 'Connecting to stream...',
-      'playbackError': 'Unable to play this stream',
-      'retry': 'Retry',
-      'importPlaylist': 'Import M3U / M3U8 Playlist',
-      'importNote':
-          'Add M3U playlists from sources you have rights to use.\nNo preloaded channels.',
-      'startImport': 'Start Import',
-      'downloading': 'Downloading...',
-      'parsing': 'Parsing channels...',
-      'importSuccess': 'Imported',
-      'channels': 'channels',
-      'newChannels': 'new channels',
-      'importFailed': 'Failed: check the URL',
-      'currentChannels': 'Current channels',
-      'savedLocally': 'Sources are saved locally.',
-      'noMovies': 'No movies yet.\nAdd a VOD source later.',
-      'noSeries': 'No series yet.\nAdd a VOD source later.',
-      'language': 'Language',
-      'arabic': 'العربية',
-      'english': 'English',
-      'manageSources': 'Manage Sources',
-      'clearChannels': 'Clear all channels',
-      'version': 'Premium 1.1 — Phones & Android TV',
-      'close': 'Close',
-      'cancel': 'Cancel',
-    },
-  };
-
-  String get(String k) =>
-      _v[locale.languageCode]?[k] ?? _v['en']?[k] ?? k;
-
-  String get live => get('live');
-  String get movies => get('movies');
-  String get series => get('series');
-  String get sources => get('sources');
-  String get settings => get('settings');
-  String get searchChannel => get('searchChannel');
-  String get all => get('all');
-  String get favorites => get('favorites');
-  String get noChannels => get('noChannels');
-  String get noResults => get('noResults');
-  String get importM3U => get('importM3U');
-  String get liveTV => get('liveTV');
-  String get chooseChannel => get('chooseChannel');
-  String get connecting => get('connecting');
-  String get playbackError => get('playbackError');
-  String get retry => get('retry');
-  String get importPlaylist => get('importPlaylist');
-  String get importNote => get('importNote');
-  String get startImport => get('startImport');
-  String get downloading => get('downloading');
-  String get parsing => get('parsing');
-  String get importSuccess => get('importSuccess');
-  String get channels => get('channels');
-  String get newChannels => get('newChannels');
-  String get importFailed => get('importFailed');
-  String get currentChannels => get('currentChannels');
-  String get savedLocally => get('savedLocally');
-  String get noMovies => get('noMovies');
-  String get noSeries => get('noSeries');
-  String get language => get('language');
-  String get arabic => get('arabic');
-  String get english => get('english');
-  String get manageSources => get('manageSources');
-  String get clearChannels => get('clearChannels');
-  String get version => get('version');
-  String get close => get('close');
-  String get cancel => get('cancel');
-}
-
-class _AppLocDelegate extends LocalizationsDelegate<AppLocalizations> {
-  const _AppLocDelegate();
-  @override
-  bool isSupported(Locale l) => ['ar', 'en'].contains(l.languageCode);
-  @override
-  Future<AppLocalizations> load(Locale l) async => AppLocalizations(l);
-  @override
-  bool shouldReload(_) => false;
-}
-
-// ───────────────────── Models ─────────────────────
+// ==========================================
+// 1. نماذج البيانات (Models)
+// ==========================================
 class Channel {
   final String id;
   final String name;
   final String url;
-  final String logo;
+  final String? logo;
   final String group;
   bool isFavorite;
-  bool isWorking;
 
   Channel({
     required this.id,
     required this.name,
     required this.url,
-    this.logo = '',
-    this.group = 'عام',
+    this.logo,
+    required this.group,
     this.isFavorite = false,
-    this.isWorking = true,
   });
-
-  factory Channel.fromJson(Map<String, dynamic> j) => Channel(
-        id: j['id'] ?? '',
-        name: j['name'] ?? '',
-        url: j['url'] ?? '',
-        logo: j['logo'] ?? '',
-        group: j['group'] ?? 'عام',
-        isFavorite: j['isFavorite'] ?? false,
-        isWorking: j['isWorking'] ?? true,
-      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -213,725 +36,996 @@ class Channel {
         'logo': logo,
         'group': group,
         'isFavorite': isFavorite,
-        'isWorking': isWorking,
       };
-}
 
-class MediaItem {
-  final String id;
-  final String title;
-  final String overview;
-  final String posterUrl;
-  final String backdropUrl;
-  final String year;
-  final double rating;
-  final List<String> genres;
-  final String type;
-  final String? streamUrl;
-  bool isFavorite;
-
-  MediaItem({
-    required this.id,
-    required this.title,
-    this.overview = '',
-    this.posterUrl = '',
-    this.backdropUrl = '',
-    this.year = '',
-    this.rating = 0,
-    this.genres = const [],
-    required this.type,
-    this.streamUrl,
-    this.isFavorite = false,
-  });
-
-  bool get isPlayable => streamUrl != null && streamUrl!.isNotEmpty;
-
-  factory MediaItem.fromJson(Map<String, dynamic> j) => MediaItem(
-        id: j['id']?.toString() ?? '',
-        title: j['title'] ?? j['name'] ?? '',
-        overview: j['overview'] ?? '',
-        posterUrl: j['posterUrl'] ?? '',
-        backdropUrl: j['backdropUrl'] ?? '',
-        year: j['year']?.toString() ?? '',
-        rating: (j['rating'] ?? 0).toDouble(),
-        genres: (j['genres'] as List?)?.map((e) => e.toString()).toList() ?? [],
-        type: j['type'] ?? 'movie',
-        streamUrl: j['streamUrl'],
-        isFavorite: j['isFavorite'] ?? false,
+  factory Channel.fromJson(Map<String, dynamic> json) => Channel(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        url: json['url'] as String,
+        logo: json['logo'] as String?,
+        group: json['group'] as String? ?? 'General',
+        isFavorite: json['isFavorite'] as bool? ?? false,
       );
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'overview': overview,
-        'posterUrl': posterUrl,
-        'backdropUrl': backdropUrl,
-        'year': year,
-        'rating': rating,
-        'genres': genres,
-        'type': type,
-        'streamUrl': streamUrl,
-        'isFavorite': isFavorite,
-      };
 }
 
-// ───────────────────── M3U Parser ─────────────────────
+// ==========================================
+// 2. معالج قوائم M3U (M3U Parser Service)
+// ==========================================
 class M3uService {
   static const _uuid = Uuid();
 
-  static Stream<Channel> parseM3uContent(String content) async* {
-    final lines = content.split(RegExp(r'\r?\n'));
-    String? name;
-    String logo = '';
-    String group = 'عام';
+  static Future<List<Channel>> fetchAndParse(String url) async {
+    final response = await http.get(Uri.parse(url)).timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => throw Exception('انتهت مهلة تحميل الرابط'),
+    );
+
+    if (response.statusCode == 200) {
+      final decodedBody = utf8.decode(response.bodyBytes, allowMalformed: true);
+      return parse(decodedBody);
+    } else {
+      throw Exception('خطأ في الاتصال: كود ${response.statusCode}');
+    }
+  }
+
+  static List<Channel> parse(String content) {
+    final List<Channel> channels = [];
+    final lines = const LineSplitter().convert(content);
+
+    String? currentName;
+    String? currentLogo;
+    String currentGroup = 'عام';
 
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
+      if (line.isEmpty) continue;
+
       if (line.startsWith('#EXTINF:')) {
-        logo = '';
-        group = 'عام';
-        final lm = RegExp(r'tvg-logo="([^"]*)"', caseSensitive: false).firstMatch(line);
-        if (lm != null) logo = lm.group(1) ?? '';
-        final gm = RegExp(r'group-title="([^"]*)"', caseSensitive: false).firstMatch(line);
-        if (gm != null && (gm.group(1)?.isNotEmpty ?? false)) group = gm.group(1)!;
-        final c = line.lastIndexOf(',');
-        name = c != -1 ? line.substring(c + 1).trim() : null;
-      } else if (line.isNotEmpty && !line.startsWith('#') && name != null && name!.isNotEmpty) {
-        final lower = line.toLowerCase();
-        if (lower.startsWith('http://') || lower.startsWith('https://')) {
-          yield Channel(id: _uuid.v4(), name: name!, url: line, logo: logo, group: group);
+        final logoMatch = RegExp(r'tvg-logo="([^"]*)"').firstMatch(line);
+        currentLogo = logoMatch?.group(1);
+
+        final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(line);
+        currentGroup = groupMatch?.group(1) ?? 'عام';
+        if (currentGroup.isEmpty) currentGroup = 'عام';
+
+        final commaIndex = line.lastIndexOf(',');
+        if (commaIndex != -1 && commaIndex < line.length - 1) {
+          currentName = line.substring(commaIndex + 1).trim();
+        } else {
+          currentName = 'قناة';
         }
-        name = null;
+      } else if (!line.startsWith('#') &&
+          (line.startsWith('http://') ||
+              line.startsWith('https://') ||
+              line.startsWith('rtmp://'))) {
+        if (currentName != null) {
+          channels.add(
+            Channel(
+              id: _uuid.v4(),
+              name: currentName,
+              url: line,
+              logo: (currentLogo != null && currentLogo.isNotEmpty)
+                  ? currentLogo
+                  : null,
+              group: currentGroup,
+            ),
+          );
+        }
+        currentName = null;
+        currentLogo = null;
+        currentGroup = 'عام';
       }
-      if (i % 50 == 0) await Future.delayed(Duration.zero);
     }
+    return channels;
   }
 }
 
-// ───────────────────── App ─────────────────────
-class HeedarTVApp extends StatefulWidget {
-  const HeedarTVApp({super.key});
-  static _HeedarTVAppState? of(BuildContext context) =>
-      context.findAncestorStateOfType<_HeedarTVAppState>();
-  @override
-  State<HeedarTVApp> createState() => _HeedarTVAppState();
+// ==========================================
+// 3. نظام الترجمة المدمج (Localizations)
+// ==========================================
+class AppStrings {
+  static final Map<String, Map<String, String>> _values = {
+    'ar': {
+      'app_title': 'Heedar TV',
+      'home': 'الرئيسية',
+      'live_tv': 'بث مباشر',
+      'favorites': 'المفضلة',
+      'sources': 'المصادر',
+      'settings': 'الإعدادات',
+      'all': 'الكل',
+      'search': 'ابحث عن اسم القناة...',
+      'channels_count': 'إجمالي القنوات',
+      'sources_count': 'المصادر المضافة',
+      'favs_count': 'المفضلة',
+      'welcome_msg': 'بوابتك الفاخرة للبث التلفزيوني بجودة عالية',
+      'add_source': 'إضافة قائمة M3U جديدة',
+      'source_name': 'اسم القائمة (مثال: قنواتي)',
+      'source_url': 'رابط M3U أو M3U8 مباشر',
+      'save': 'حفظ وإضافة',
+      'cancel': 'إلغاء',
+      'delete': 'حذف',
+      'no_channels': 'لا توجد قنوات. أضف مصدراً من قسم المصادر.',
+      'no_favs': 'قائمتك المفضلة فارغة حالياً.',
+      'loading': 'جاري استيراد القنوات...',
+      'success': 'تم استيراد القنوات بنجاح',
+      'error': 'تعذر جلب المصدر، يرجى فحص الرابط',
+      'lang': 'اللغة / Language',
+      'clear_cache': 'مسح جميع القنوات المحفوظة',
+    },
+    'en': {
+      'app_title': 'Heedar TV',
+      'home': 'Home',
+      'live_tv': 'Live TV',
+      'favorites': 'Favorites',
+      'sources': 'Sources',
+      'settings': 'Settings',
+      'all': 'All',
+      'search': 'Search channel name...',
+      'channels_count': 'Total Channels',
+      'sources_count': 'Total Sources',
+      'favs_count': 'Favorites',
+      'welcome_msg': 'Your premium live streaming gateway',
+      'add_source': 'Add New M3U Playlist',
+      'source_name': 'Playlist Name',
+      'source_url': 'Direct M3U / M3U8 URL',
+      'save': 'Save & Import',
+      'cancel': 'Cancel',
+      'delete': 'Delete',
+      'no_channels': 'No channels found. Add a source first.',
+      'no_favs': 'Your favorites list is empty.',
+      'loading': 'Importing channels...',
+      'success': 'Channels imported successfully',
+      'error': 'Failed to import source. Check URL.',
+      'lang': 'Language / اللغة',
+      'clear_cache': 'Clear all cached channels',
+    }
+  };
+
+  static String get(String key, String lang) {
+    return _values[lang]?[key] ?? _values['ar']![key] ?? key;
+  }
 }
 
-class _HeedarTVAppState extends State<HeedarTVApp> {
-  Locale _locale = const Locale('ar', 'AE');
+// ==========================================
+// 4. التطبيق الرئيسي والثيم الفاخر
+// ==========================================
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const HeedarTvApp());
+}
+
+class HeedarTvApp extends StatefulWidget {
+  const HeedarTvApp({super.key});
+
+  static void setLocale(BuildContext context, String lang) {
+    final state = context.findAncestorStateOfType<_HeedarTvAppState>();
+    state?.changeLanguage(lang);
+  }
+
+  @override
+  State<HeedarTvApp> createState() => _HeedarTvAppState();
+}
+
+class _HeedarTvAppState extends State<HeedarTvApp> {
+  String _currentLocale = 'ar';
 
   @override
   void initState() {
     super.initState();
-    _loadLocale();
+    _loadLang();
   }
 
-  Future<void> _loadLocale() async {
-    final p = await SharedPreferences.getInstance();
-    final code = p.getString('app_locale') ?? 'ar';
-    if (mounted) {
-      setState(() {
-        _locale = code == 'en' ? const Locale('en', 'US') : const Locale('ar', 'AE');
-      });
-    }
+  void _loadLang() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentLocale = prefs.getString('app_lang') ?? 'ar';
+    });
   }
 
-  Future<void> setLocale(Locale locale) async {
-    setState(() => _locale = locale);
-    final p = await SharedPreferences.getInstance();
-    await p.setString('app_locale', locale.languageCode);
+  void changeLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_lang', lang);
+    setState(() {
+      _currentLocale = lang;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isAr = _locale.languageCode == 'ar';
+    const goldPrimary = Color(0xFFD4AF37);
+    const bgDark = Color(0xFF0D0E12);
+    const cardDark = Color(0xFF161821);
+
     return MaterialApp(
       title: 'Heedar TV',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0D10),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFD4A84B),
-          surface: Color(0xFF141820),
-        ),
-        textTheme: isAr
-            ? GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme)
-            : GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-        useMaterial3: true,
-      ),
-      locale: _locale,
-      supportedLocales: const [Locale('ar', 'AE'), Locale('en', 'US')],
+      locale: Locale(_currentLocale),
+      supportedLocales: const [Locale('ar'), Locale('en')],
       localizationsDelegates: const [
-        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const MainShell(),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: bgDark,
+        primaryColor: goldPrimary,
+        fontFamily: 'sans-serif',
+        colorScheme: const ColorScheme.dark(
+          primary: goldPrimary,
+          secondary: Color(0xFFFFD700),
+          surface: cardDark,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: bgDark,
+          elevation: 0,
+        ),
+      ),
+      home: MainShellScreen(currentLang: _currentLocale),
     );
   }
 }
 
-class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+// ==========================================
+// 5. الشاشة الرئيسية والهيكل العام مع دعم TV
+// ==========================================
+class MainShellScreen extends StatefulWidget {
+  final String currentLang;
+  const MainShellScreen({super.key, required this.currentLang});
+
   @override
-  State<MainShell> createState() => _MainShellState();
+  State<MainShellScreen> createState() => _MainShellScreenState();
 }
 
-class _MainShellState extends State<MainShell> {
-  int _tab = 0;
+class _MainShellScreenState extends State<MainShellScreen> {
+  int _selectedIndex = 0;
   List<Channel> _channels = [];
-  final List<MediaItem> _movies = [];
-  final List<MediaItem> _series = [];
+  final List<Map<String, String>> _sources = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadData();
   }
 
-  Future<void> _load() async {
-    final p = await SharedPreferences.getInstance();
-    try {
-      final ch = p.getString('saved_channels');
-      if (ch != null) {
-        _channels = (jsonDecode(ch) as List)
-            .map((e) => Channel.fromJson(Map<String, dynamic>.from(e)))
-            .toList();
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSources = prefs.getStringList('tv_sources') ?? [];
+    final savedFavs = prefs.getStringList('tv_favorites') ?? [];
+
+    setState(() {
+      _sources.clear();
+      for (var s in savedSources) {
+        _sources.add(Map<String, String>.from(jsonDecode(s)));
       }
-    } catch (_) {}
-    if (mounted) setState(() {});
+    });
+
+    final cachedJson = prefs.getString('tv_channels');
+    if (cachedJson != null) {
+      final List dec = jsonDecode(cachedJson);
+      setState(() {
+        _channels = dec.map((c) {
+          final ch = Channel.fromJson(c);
+          ch.isFavorite = savedFavs.contains(ch.url);
+          return ch;
+        }).toList();
+      });
+    }
   }
 
-  Future<void> _saveChannels() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(
-        'saved_channels', jsonEncode(_channels.map((c) => c.toJson()).toList()));
+  Future<void> _saveChannels(List<Channel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(list.map((e) => e.toJson()).toList());
+    await prefs.setString('tv_channels', jsonStr);
   }
 
-  void _onChannels(List<Channel> list) {
-    setState(() => _channels = list);
-    _saveChannels();
+  Future<void> _addSource(String name, String url) async {
+    setState(() => _isLoading = true);
+    try {
+      final parsedChannels = await M3uService.fetchAndParse(url);
+      final prefs = await SharedPreferences.getInstance();
+
+      final sourceObj = {'name': name, 'url': url};
+      _sources.add(sourceObj);
+
+      await prefs.setStringList(
+          'tv_sources', _sources.map((e) => jsonEncode(e)).toList());
+
+      final updatedChannels = [..._channels, ...parsedChannels];
+      setState(() {
+        _channels = updatedChannels;
+      });
+      await _saveChannels(updatedChannels);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '${AppStrings.get('success', widget.currentLang)} (+${parsedChannels.length})'),
+            backgroundColor: const Color(0xFFD4AF37),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppStrings.get('error', widget.currentLang)}: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _toggleFav(Channel ch) async {
+    setState(() {
+      ch.isFavorite = !ch.isFavorite;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final favList =
+        _channels.where((c) => c.isFavorite).map((c) => c.url).toList();
+    await prefs.setStringList('tv_favorites', favList);
+  }
+
+  void _clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('tv_channels');
+    await prefs.remove('tv_sources');
+    await prefs.remove('tv_favorites');
+    setState(() {
+      _channels.clear();
+      _sources.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    final l10n = AppLocalizations.of(context);
+    final isArabic = widget.currentLang == 'ar';
+    final lang = widget.currentLang;
 
     final pages = [
-      LivePage(channels: _channels, onUpdate: _onChannels),
-      VodPage(title: l10n.movies, items: _movies, emptyHint: l10n.noMovies, type: 'movie'),
-      VodPage(title: l10n.series, items: _series, emptyHint: l10n.noSeries, type: 'series'),
-      SourcesPage(channels: _channels, onUpdate: _onChannels),
-      const SettingsPage(),
+      _buildHomeView(lang),
+      _buildChannelsView(lang, false),
+      _buildChannelsView(lang, true),
+      _buildSourcesView(lang),
+      _buildSettingsView(lang),
     ];
 
-    return Directionality(
-      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0B0D10),
-        body: pages[_tab],
-        bottomNavigationBar: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF0E1116),
-            border: Border(top: BorderSide(color: Color(0xFF1A1F28))),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _nav(0, Icons.live_tv_rounded, l10n.live),
-                  _nav(1, Icons.movie_creation_rounded, l10n.movies),
-                  _nav(2, Icons.tv_rounded, l10n.series),
-                  _nav(3, Icons.cloud_download_rounded, l10n.sources),
-                  _nav(4, Icons.settings_rounded, l10n.settings),
-                ],
+    return Scaffold(
+      body: Row(
+        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+        children: [
+          NavigationRail(
+            backgroundColor: const Color(0xFF111218),
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (val) => setState(() => _selectedIndex = val),
+            labelType: NavigationRailLabelType.all,
+            selectedIconTheme:
+                const IconThemeData(color: Color(0xFFD4AF37), size: 28),
+            unselectedIconTheme:
+                const IconThemeData(color: Colors.white54, size: 24),
+            selectedLabelTextStyle: const TextStyle(
+                color: Color(0xFFD4AF37),
+                fontWeight: FontWeight.bold,
+                fontSize: 12),
+            unselectedLabelTextStyle:
+                const TextStyle(color: Colors.white54, fontSize: 11),
+            leading: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFD4AF37), width: 1.5),
+                ),
+                child: const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 28),
               ),
             ),
+            destinations: [
+              NavigationRailDestination(
+                icon: const Icon(Icons.home_outlined),
+                selectedIcon: const Icon(Icons.home),
+                label: Text(AppStrings.get('home', lang)),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.live_tv_outlined),
+                selectedIcon: const Icon(Icons.live_tv),
+                label: Text(AppStrings.get('live_tv', lang)),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.star_border),
+                selectedIcon: const Icon(Icons.star),
+                label: Text(AppStrings.get('favorites', lang)),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.cloud_download_outlined),
+                selectedIcon: const Icon(Icons.cloud_download),
+                label: Text(AppStrings.get('sources', lang)),
+              ),
+              NavigationRailDestination(
+                icon: const Icon(Icons.settings_outlined),
+                selectedIcon: const Icon(Icons.settings),
+                label: Text(AppStrings.get('settings', lang)),
+              ),
+            ],
           ),
-        ),
+          const VerticalDivider(width: 1, thickness: 1, color: Colors.white12),
+          Expanded(child: pages[_selectedIndex]),
+        ],
       ),
     );
   }
 
-  Widget _nav(int i, IconData icon, String label) {
-    final sel = _tab == i;
-    return InkWell(
-      onTap: () => setState(() => _tab = i),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  // --- شاشة الرئيسية ---
+  Widget _buildHomeView(String lang) {
+    final favCount = _channels.where((c) => c.isFavorite).length;
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: ListView(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF222634), Color(0xFF13151D)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'HEEDAR TV — LUXURY',
+                        style: TextStyle(
+                          color: Color(0xFFD4AF37),
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.get('welcome_msg', lang),
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4AF37),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 14),
+                  ),
+                  onPressed: () => setState(() => _selectedIndex = 1),
+                  icon: const Icon(Icons.play_circle_fill),
+                  label: Text(AppStrings.get('live_tv', lang),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                )
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              _buildStatCard(AppStrings.get('channels_count', lang),
+                  '${_channels.length}', Icons.tv, Colors.blueAccent),
+              const SizedBox(width: 16),
+              _buildStatCard(AppStrings.get('sources_count', lang),
+                  '${_sources.length}', Icons.source, Colors.amber),
+              const SizedBox(width: 16),
+              _buildStatCard(AppStrings.get('favs_count', lang), '$favCount',
+                  Icons.star, Colors.redAccent),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+      String title, String count, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161821),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
           children: [
-            Icon(icon, size: 24, color: sel ? const Color(0xFFD4A84B) : Colors.white38),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 10,
-                    color: sel ? const Color(0xFFD4A84B) : Colors.white38,
-                    fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.15),
+              radius: 24,
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(count,
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                Text(title,
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.white54)),
+              ],
+            )
           ],
         ),
       ),
     );
   }
-}
 
-// ───────────────────── VOD (OwnTV style) ─────────────────────
-class VodPage extends StatefulWidget {
-  final String title;
-  final List<MediaItem> items;
-  final String emptyHint;
-  final String type;
-  const VodPage(
-      {super.key,
-      required this.title,
-      required this.items,
-      required this.emptyHint,
-      required this.type});
-  @override
-  State<VodPage> createState() => _VodPageState();
-}
-
-class _VodPageState extends State<VodPage> {
-  String _search = '';
-
-  List<MediaItem> get _filtered {
-    if (_search.isEmpty) return widget.items;
-    final q = _search.toLowerCase();
-    return widget.items.where((m) => m.title.toLowerCase().contains(q)).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = _filtered;
-    final hero = items.isNotEmpty ? items.first : null;
-
-    return CustomScrollView(
-      slivers: [
-        if (hero != null)
-          SliverToBoxAdapter(child: _HeroBanner(item: hero))
-        else
-          SliverToBoxAdapter(
-            child: Container(
-              height: 200,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1A1F2E), Color(0xFF0B0D10)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Center(
-                child: Text(widget.title,
-                    style: GoogleFonts.cairo(
-                        color: const Color(0xFFD4A84B),
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
-        if (widget.items.isNotEmpty)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                onChanged: (v) => setState(() => _search = v),
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Search ${widget.title}...',
-                  hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 20),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1F28),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-          ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text('${widget.title}  ·  ${items.length} titles',
-                style: const TextStyle(color: Colors.white54, fontSize: 13)),
-          ),
-        ),
-        if (items.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text(widget.emptyHint,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white38, fontSize: 15, height: 1.5)),
-              ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.58,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 12,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) => _PosterCard(item: items[i]),
-                childCount: items.length,
-              ),
-            ),
-          ),
-      ],
+  // --- شاشة القنوات والمفضلة مع تصنيفات وبحث ---
+  Widget _buildChannelsView(String lang, bool onlyFavs) {
+    return _ChannelExplorer(
+      channels:
+          onlyFavs ? _channels.where((c) => c.isFavorite).toList() : _channels,
+      isFavMode: onlyFavs,
+      lang: lang,
+      onToggleFav: _toggleFav,
     );
   }
-}
 
-class _HeroBanner extends StatelessWidget {
-  final MediaItem item;
-  const _HeroBanner({required this.item});
+  // --- شاشة المصادر ---
+  Widget _buildSourcesView(String lang) {
+    final nameCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
 
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.42,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (item.posterUrl.isNotEmpty)
-            CachedNetworkImage(imageUrl: item.posterUrl, fit: BoxFit.cover)
-          else
-            Container(color: const Color(0xFF141820)),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(0.15),
-                  Colors.black.withOpacity(0.55),
-                  const Color(0xFF0B0D10),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 20,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.title,
-                    maxLines: 2,
-                    style: GoogleFonts.cairo(
-                        color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
-                if (item.rating > 0) ...[
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    const Icon(Icons.star_rounded, color: Color(0xFFD4A84B), size: 16),
-                    Text(' ${item.rating.toStringAsFixed(1)}',
-                        style: const TextStyle(color: Color(0xFFD4A84B), fontWeight: FontWeight.bold)),
-                  ]),
-                ],
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4A84B),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: item.isPlayable
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    PlayerScreen(title: item.title, url: item.streamUrl!)),
-                          )
-                      : null,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Play', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PosterCard extends StatelessWidget {
-  final MediaItem item;
-  const _PosterCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (item.isPlayable) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => PlayerScreen(title: item.title, url: item.streamUrl!)),
-          );
-        }
-      },
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: item.posterUrl.isNotEmpty
-                      ? CachedNetworkImage(imageUrl: item.posterUrl, fit: BoxFit.cover)
-                      : Container(
-                          color: const Color(0xFF1A1F28),
-                          child: const Icon(Icons.movie, color: Colors.white24)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                AppStrings.get('sources', lang),
+                style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFD4AF37)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD4AF37),
+                  foregroundColor: Colors.black,
                 ),
-                if (item.rating > 0)
-                  Positioned(
-                    top: 6,
-                    left: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: Colors.black87, borderRadius: BorderRadius.circular(6)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.star_rounded, color: Color(0xFFD4A84B), size: 12),
-                        Text(' ${item.rating.toStringAsFixed(1)}',
-                            style: const TextStyle(color: Colors.white, fontSize: 11)),
-                      ]),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: const Color(0xFF1A1D27),
+                      title: Text(AppStrings.get('add_source', lang)),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(
+                            controller: nameCtrl,
+                            decoration: InputDecoration(
+                              labelText: AppStrings.get('source_name', lang),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: urlCtrl,
+                            decoration: InputDecoration(
+                              labelText: AppStrings.get('source_url', lang),
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(AppStrings.get('cancel', lang)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD4AF37)),
+                          onPressed: () {
+                            if (urlCtrl.text.trim().isNotEmpty) {
+                              Navigator.pop(ctx);
+                              _addSource(
+                                nameCtrl.text.trim().isEmpty
+                                    ? 'قائمة'
+                                    : nameCtrl.text.trim(),
+                                urlCtrl.text.trim(),
+                              );
+                            }
+                          },
+                          child: Text(AppStrings.get('save', lang),
+                              style: const TextStyle(color: Colors.black)),
+                        ),
+                      ],
                     ),
-                  ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: Text(AppStrings.get('add_source', lang)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+              ),
+            )
+          else if (_sources.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 60.0),
+                child: Text(AppStrings.get('no_channels', lang),
+                    style: const TextStyle(color: Colors.white54)),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                itemCount: _sources.length,
+                itemBuilder: (ctx, idx) {
+                  final s = _sources[idx];
+                  return Card(
+                    color: const Color(0xFF161821),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: const Icon(Icons.link, color: Color(0xFFD4AF37)),
+                      title: Text(s['name'] ?? '',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(s['url'] ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white38)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: () async {
+                          setState(() {
+                            _sources.removeAt(idx);
+                          });
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setStringList('tv_sources',
+                              _sources.map((e) => jsonEncode(e)).toList());
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // --- شاشة الإعدادات ---
+  Widget _buildSettingsView(String lang) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.get('settings', lang),
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFD4AF37)),
+          ),
+          const SizedBox(height: 24),
+          ListTile(
+            tileColor: const Color(0xFF161821),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            leading: const Icon(Icons.language, color: Color(0xFFD4AF37)),
+            title: Text(AppStrings.get('lang', lang)),
+            trailing: DropdownButton<String>(
+              dropdownColor: const Color(0xFF1E212D),
+              value: lang,
+              underline: const SizedBox(),
+              items: const [
+                DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                DropdownMenuItem(value: 'en', child: Text('English')),
               ],
+              onChanged: (val) {
+                if (val != null) {
+                  HeedarTvApp.setLocale(context, val);
+                }
+              },
             ),
           ),
-          const SizedBox(height: 6),
-          Text(item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          ListTile(
+            tileColor: const Color(0xFF161821),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+            title: Text(AppStrings.get('clear_cache', lang)),
+            onTap: () {
+              _clearCache();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تم تنظيف الذاكرة والقنوات')),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 }
 
-// ───────────────────── Live ─────────────────────
-class LivePage extends StatefulWidget {
+// ==========================================
+// 6. مستعرض القنوات وتصفيتها حسب الفئة والبحث
+// ==========================================
+class _ChannelExplorer extends StatefulWidget {
   final List<Channel> channels;
-  final Function(List<Channel>) onUpdate;
-  const LivePage({super.key, required this.channels, required this.onUpdate});
+  final bool isFavMode;
+  final String lang;
+  final Function(Channel) onToggleFav;
+
+  const _ChannelExplorer({
+    required this.channels,
+    required this.isFavMode,
+    required this.lang,
+    required this.onToggleFav,
+  });
+
   @override
-  State<LivePage> createState() => _LivePageState();
+  State<_ChannelExplorer> createState() => _ChannelExplorerState();
 }
 
-class _LivePageState extends State<LivePage> {
-  String _search = '';
-  String _cat = '__all__';
-
-  List<String> get _cats {
-    final g = widget.channels.map((c) => c.group).toSet().toList()..sort();
-    return ['__all__', '__fav__', ...g];
-  }
-
-  String _label(String c) {
-    final l = AppLocalizations.of(context);
-    if (c == '__all__') return l.all;
-    if (c == '__fav__') return l.favorites;
-    return c;
-  }
-
-  List<Channel> get _filtered {
-    var list = widget.channels;
-    if (_cat == '__fav__') list = list.where((c) => c.isFavorite).toList();
-    else if (_cat != '__all__') list = list.where((c) => c.group == _cat).toList();
-    if (_search.isNotEmpty) {
-      final q = _search.toLowerCase();
-      list = list.where((c) => c.name.toLowerCase().contains(q)).toList();
-    }
-    return list;
-  }
+class _ChannelExplorerState extends State<_ChannelExplorer> {
+  String _selectedCategory = 'الكل';
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final list = _filtered;
+    final categories = [
+      'الكل',
+      ...widget.channels.map((c) => c.group).toSet()
+    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Text(l10n.liveTV,
-                style: GoogleFonts.cairo(
-                    color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+    final filtered = widget.channels.where((c) {
+      final matchesCat =
+          (_selectedCategory == 'الكل' || c.group == _selectedCategory);
+      final matchesSearch =
+          c.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCat && matchesSearch;
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  decoration: InputDecoration(
+                    hintText: AppStrings.get('search', widget.lang),
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFFD4AF37)),
+                    filled: true,
+                    fillColor: const Color(0xFF161821),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            onChanged: (v) => setState(() => _search = v),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: l10n.searchChannel,
-              hintStyle: const TextStyle(color: Colors.white30),
-              prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 20),
-              filled: true,
-              fillColor: const Color(0xFF1A1F28),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: EdgeInsets.zero,
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (ctx, i) {
+                final cat = categories[i];
+                final isSel = cat == _selectedCategory;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: ChoiceChip(
+                    label: Text(cat),
+                    selected: isSel,
+                    selectedColor: const Color(0xFFD4AF37),
+                    labelStyle: TextStyle(
+                      color: isSel ? Colors.black : Colors.white70,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    backgroundColor: const Color(0xFF161821),
+                    onSelected: (val) {
+                      setState(() => _selectedCategory = cat);
+                    },
+                  ),
+                );
+              },
             ),
           ),
-        ),
-        SizedBox(
-          height: 42,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _cats.length,
-            itemBuilder: (_, i) {
-              final c = _cats[i];
-              final sel = _cat == c;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                child: GestureDetector(
-                  onTap: () => setState(() => _cat = c),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: sel ? const Color(0xFFD4A84B) : const Color(0xFF1A1F28),
-                      borderRadius: BorderRadius.circular(20),
+          const SizedBox(height: 12),
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text(
+                      widget.isFavMode
+                          ? AppStrings.get('no_favs', widget.lang)
+                          : AppStrings.get('no_channels', widget.lang),
+                      style: const TextStyle(color: Colors.white54),
                     ),
-                    child: Text(_label(c),
-                        style: TextStyle(
-                            color: sel ? Colors.black : Colors.white70,
-                            fontSize: 12,
-                            fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Expanded(
-          child: list.isEmpty
-              ? Center(
-                  child: Text(
-                      widget.channels.isEmpty ? l10n.noChannels : l10n.noResults,
-                      style: const TextStyle(color: Colors.white38)))
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 0.85,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: list.length,
-                  itemBuilder: (_, i) {
-                    final ch = list[i];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => PlayerScreen(title: ch.name, url: ch.url)),
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141820),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: ch.logo.isNotEmpty
-                                    ? CachedNetworkImage(
-                                        imageUrl: ch.logo,
-                                        fit: BoxFit.contain,
-                                        errorWidget: (_, __, ___) =>
-                                            const Icon(Icons.live_tv, color: Color(0xFFD4A84B)))
-                                    : const Icon(Icons.live_tv,
-                                        color: Color(0xFFD4A84B), size: 36),
+                  )
+                : GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 220,
+                      childAspectRatio: 1.1,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (ctx, idx) {
+                      final ch = filtered[idx];
+                      return Focus(
+                        child: Builder(builder: (context) {
+                          final isFocused = Focus.of(context).hasFocus;
+                          return InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      VideoPlayerScreen(channel: ch),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF161821),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isFocused
+                                      ? const Color(0xFFD4AF37)
+                                      : Colors.white12,
+                                  width: isFocused ? 2.5 : 1,
+                                ),
+                              ),
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        if (ch.logo != null &&
+                                            ch.logo!.isNotEmpty)
+                                          CachedNetworkImage(
+                                            imageUrl: ch.logo!,
+                                            height: 50,
+                                            width: 50,
+                                            errorWidget: (_, __, ___) =>
+                                                const Icon(Icons.tv,
+                                                    size: 40,
+                                                    color: Color(0xFFD4AF37)),
+                                          )
+                                        else
+                                          const Icon(Icons.tv,
+                                              size: 40,
+                                              color: Color(0xFFD4AF37)),
+                                        const SizedBox(height: 8),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8.0),
+                                          child: Text(
+                                            ch.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: IconButton(
+                                      icon: Icon(
+                                        ch.isFavorite
+                                            ? Icons.star
+                                            : Icons.star_border,
+                                        color: ch.isFavorite
+                                            ? Colors.amber
+                                            : Colors.white38,
+                                        size: 20,
+                                      ),
+                                      onPressed: () =>
+                                          widget.onToggleFav(ch),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-                              child: Text(ch.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white, fontSize: 11)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+                          );
+                        }),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ───────────────────── Player ─────────────────────
-class PlayerScreen extends StatefulWidget {
-  final String title;
-  final String url;
-  const PlayerScreen({super.key, required this.title, required this.url});
+// ==========================================
+// 7. مشغل الفيديو فائق الفخامة والتحكم
+// ==========================================
+class VideoPlayerScreen extends StatefulWidget {
+  final Channel channel;
+  const VideoPlayerScreen({super.key, required this.channel});
+
   @override
-  State<PlayerScreen> createState() => _PlayerScreenState();
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> {
-  VideoPlayerController? _c;
-  bool _loading = true;
-  bool _error = false;
-  bool _controls = true;
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late VideoPlayerController _controller;
+  bool _hasError = false;
+  bool _showControls = true;
 
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
-    _init();
+    _initPlayer();
   }
 
-  Future<void> _init() async {
-    try {
-      final c = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-      await c.initialize().timeout(const Duration(seconds: 15));
-      await c.play();
-      if (mounted) setState(() { _c = c; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() { _loading = false; _error = true; });
-    }
+  void _initPlayer() {
+    setState(() {
+      _hasError = false;
+    });
+    _controller =
+        VideoPlayerController.networkUrl(Uri.parse(widget.channel.url))
+          ..initialize().then((_) {
+            setState(() {});
+            _controller.play();
+          }).catchError((err) {
+            setState(() {
+              _hasError = true;
+            });
+          });
   }
 
   @override
   void dispose() {
-    _c?.dispose();
     WakelockPlus.disable();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -940,254 +1034,85 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
-        onTap: () => setState(() => _controls = !_controls),
+        onTap: () => setState(() => _showControls = !_showControls),
         child: Stack(
-          fit: StackFit.expand,
           children: [
             Center(
-              child: _error
-                  ? const Column(
+              child: _hasError
+                  ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline, color: Colors.redAccent, size: 56),
-                        SizedBox(height: 12),
-                        Text('تعذر تشغيل البث', style: TextStyle(color: Colors.white70)),
+                        const Icon(Icons.error_outline,
+                            color: Colors.redAccent, size: 48),
+                        const SizedBox(height: 12),
+                        const Text('تعذر تشغيل هذا البث المباشر',
+                            style: TextStyle(color: Colors.white70)),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFD4AF37)),
+                          onPressed: _initPlayer,
+                          icon: const Icon(Icons.refresh, color: Colors.black),
+                          label: const Text('إعادة المحاولة',
+                              style: TextStyle(color: Colors.black)),
+                        )
                       ],
                     )
-                  : _loading
-                      ? const CircularProgressIndicator(color: Color(0xFFD4A84B))
-                      : _c != null && _c!.value.isInitialized
-                          ? AspectRatio(
-                              aspectRatio: _c!.value.aspectRatio,
-                              child: VideoPlayer(_c!))
-                          : const SizedBox(),
+                  : _controller.value.isInitialized
+                      ? AspectRatio(
+                          aspectRatio: _controller.value.aspectRatio,
+                          child: VideoPlayer(_controller),
+                        )
+                      : const CircularProgressIndicator(
+                          color: Color(0xFFD4AF37)),
             ),
-            if (_controls)
-              SafeArea(
+            if (_showControls)
+              Container(
+                color: Colors.black38,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 24.0),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [
-                      IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.pop(context)),
-                      Expanded(
-                          child: Text(widget.title,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis)),
-                    ]),
-                    const Spacer(),
-                    if (_c != null)
-                      IconButton(
-                        iconSize: 64,
-                        icon: Icon(
-                            _c!.value.isPlaying
-                                ? Icons.pause_circle_filled
-                                : Icons.play_circle_filled,
-                            color: const Color(0xFFD4A84B)),
-                        onPressed: () => setState(
-                            () => _c!.value.isPlaying ? _c!.pause() : _c!.play()),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back,
+                              color: Colors.white, size: 28),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.channel.name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      iconSize: 56,
+                      color: const Color(0xFFD4AF37),
+                      icon: Icon(
+                        _controller.value.isPlaying
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_filled,
                       ),
-                    const SizedBox(height: 40),
+                      onPressed: () {
+                        setState(() {
+                          _controller.value.isPlaying
+                              ? _controller.pause()
+                              : _controller.play();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ───────────────────── Sources ─────────────────────
-class SourcesPage extends StatefulWidget {
-  final List<Channel> channels;
-  final Function(List<Channel>) onUpdate;
-  const SourcesPage({super.key, required this.channels, required this.onUpdate});
-  @override
-  State<SourcesPage> createState() => _SourcesPageState();
-}
-
-class _SourcesPageState extends State<SourcesPage> {
-  final _url = TextEditingController();
-  bool _busy = false;
-  String _status = '';
-
-  Future<void> _import() async {
-    final url = _url.text.trim();
-    if (url.isEmpty) return;
-    setState(() {
-      _busy = true;
-      _status = AppLocalizations.of(context).downloading;
-    });
-    try {
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 30));
-      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
-      setState(() => _status = AppLocalizations.of(context).parsing);
-      final list = <Channel>[];
-      await for (final ch in M3uService.parseM3uContent(res.body)) {
-        list.add(ch);
-      }
-      final exist = widget.channels.map((c) => c.url).toSet();
-      final neu = list.where((c) => !exist.contains(c.url)).toList();
-      widget.onUpdate([...widget.channels, ...neu]);
-      setState(() {
-        _busy = false;
-        _status =
-            '${AppLocalizations.of(context).importSuccess} ${neu.length} ${AppLocalizations.of(context).newChannels}';
-        _url.clear();
-      });
-    } catch (_) {
-      setState(() {
-        _busy = false;
-        _status = AppLocalizations.of(context).importFailed;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(l10n.manageSources,
-              style: GoogleFonts.cairo(
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(l10n.importNote, style: const TextStyle(color: Colors.white54, fontSize: 13)),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFF141820),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFD4A84B).withOpacity(0.25)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(l10n.importPlaylist,
-                    style: const TextStyle(
-                        color: Color(0xFFD4A84B), fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _url,
-                  enabled: !_busy,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'https://...playlist.m3u',
-                    hintStyle: const TextStyle(color: Colors.white24),
-                    filled: true,
-                    fillColor: const Color(0xFF1A1F28),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_status.isNotEmpty)
-                  Text(_status, style: const TextStyle(color: Color(0xFFD4A84B))),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD4A84B),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _busy ? null : _import,
-                  child: _busy
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : Text(l10n.startImport,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text('${l10n.currentChannels}: ${widget.channels.length}',
-              style: const TextStyle(color: Colors.white54)),
-          Text(l10n.savedLocally, style: const TextStyle(color: Colors.white30, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-}
-
-// ───────────────────── Settings ─────────────────────
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final isAr = Localizations.localeOf(context).languageCode == 'ar';
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(l10n.settings,
-              style: GoogleFonts.cairo(
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          ListTile(
-            leading: const Icon(Icons.language, color: Color(0xFFD4A84B)),
-            title: Text(l10n.language, style: const TextStyle(color: Colors.white)),
-            subtitle: Text(isAr ? l10n.arabic : l10n.english,
-                style: const TextStyle(color: Colors.white54)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _chip(context, 'AR', isAr,
-                    () => HeedarTVApp.of(context)?.setLocale(const Locale('ar', 'AE'))),
-                const SizedBox(width: 6),
-                _chip(context, 'EN', !isAr,
-                    () => HeedarTVApp.of(context)?.setLocale(const Locale('en', 'US'))),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12),
-          ListTile(
-            leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-            title: Text(l10n.clearChannels, style: const TextStyle(color: Colors.white)),
-            onTap: () async {
-              final p = await SharedPreferences.getInstance();
-              await p.remove('saved_channels');
-            },
-          ),
-          const Divider(color: Colors.white12),
-          ListTile(
-            leading: const Icon(Icons.info_outline, color: Color(0xFFD4A84B)),
-            title: const Text('Heedar TV', style: TextStyle(color: Colors.white)),
-            subtitle: Text(l10n.version,
-                style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(BuildContext ctx, String label, bool sel, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: sel ? const Color(0xFFD4A84B) : const Color(0xFF1A1F28),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                color: sel ? Colors.black : Colors.white70,
-                fontWeight: FontWeight.bold,
-                fontSize: 13)),
       ),
     );
   }
