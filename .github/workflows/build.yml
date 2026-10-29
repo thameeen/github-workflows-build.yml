@@ -1,4 +1,4 @@
-name: Build Heedar TV (OwnTV Official Rebrand)
+name: Build Heedar TV (OwnTV Full Rebrand)
 
 on:
   push:
@@ -20,20 +20,49 @@ jobs:
           # 1. تنزيل نسخة OwnTV الرسمية المستقرة الكاملة
           curl -L -o owntv.apk https://github.com/ahXN00/OwnTV/releases/latest/download/OwnTV.apk
           
-          # 2. تنزيل أحدث أدوات تعديل وتوقيع تطبيقات أندرويد
+          # 2. تنزيل أدوات التعديل والتوقيع
           wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -O apktool.jar
           wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
           
-          # 3. تعديل اسم التطبيق في الواجهة وشاشة الهاتف
+          # 3. فك التطبيق
           java -jar apktool.jar d -s -f owntv.apk -o owntv_decompiled
-          find owntv_decompiled/res/ -name "strings.xml" -exec sed -i 's/>OwnTV</>Heedar TV</g' {} +
+          
+          # 4. استبدال كلمة OwnTV أينما وُجدت في أي جملة بجميع اللغات
+          python3 -c "
+          import os, re
+          res_dir = 'owntv_decompiled/res'
+          for root, _, files in os.walk(res_dir):
+              for f in files:
+                  if f.endswith('.xml'):
+                      p = os.path.join(root, f)
+                      with open(p, 'r', encoding='utf-8', errors='ignore') as fp:
+                          c = fp.read()
+                      
+                      # استبدال الكلمة داخل الجمل والنصوص (مثل الترحيب والخروج)
+                      def repl_tag(m):
+                          val = m.group(1)
+                          val = val.replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV')
+                          return '>' + val + '<'
+                      
+                      # استبدال الكلمة داخل عناوين الأزرار والشاشات
+                      def repl_attr(m):
+                          attr = m.group(1)
+                          val = m.group(2).replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV')
+                          return attr + '=\"' + val + '\"'
+                      
+                      c2 = re.sub(r'>([^<]+)<', repl_tag, c)
+                      c2 = re.sub(r'(android:(?:text|title|label|hint))=\"([^\"]+)\"', repl_attr, c2)
+                      
+                      if c2 != c:
+                          with open(p, 'w', encoding='utf-8') as fp:
+                              fp.write(c2)
+          "
+          
           sed -i 's/android:label="OwnTV"/android:label="Heedar TV"/g' owntv_decompiled/AndroidManifest.xml || true
           
-          # 4. إعادة تجميع وتوقيع التطبيق رسمياً
+          # 5. إعادة تجميع وتوقيع التطبيق بشهادة جديدة
           java -jar apktool.jar b owntv_decompiled -o heedar_unsigned.apk
           java -jar signer.jar -a heedar_unsigned.apk --allowResign -o output/
-          
-          # 5. تجهيز الملف النهائي
           mv output/*.apk HeedarTV-APK.apk
 
       - name: Upload Heedar TV APK
