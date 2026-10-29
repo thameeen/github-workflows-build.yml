@@ -25,9 +25,9 @@ jobs:
           git clone --depth 1 https://github.com/ahXN00/OwnTV.git app_src
           cd app_src
 
-          # تغيير اسم التطبيق إلى Heedar TV
+          # تعديل اسم التطبيق في ملفات النصوص والواجهة فقط دون المساس بملفات النظام
           find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>OwnTV</>Heedar TV</g' {} +
-          sed -i 's/OwnTV/Heedar TV/g' app/src/main/AndroidManifest.xml
+          sed -i 's/name="app_name">.*<\/string>/name="app_name">Heedar TV<\/string>/g' app/src/main/res/values/strings.xml || true
 
           chmod +x ./gradlew
           ./gradlew assembleStandardDebug --no-daemon
