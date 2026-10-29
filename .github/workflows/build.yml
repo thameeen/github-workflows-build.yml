@@ -1,4 +1,4 @@
-name: Build Heedar TV (OwnTV Engine)
+name: Build Heedar TV (OwnTV Official Rebrand)
 
 on:
   push:
@@ -13,27 +13,31 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
-
-      - name: Clone OwnTV & Rebrand to Heedar TV
+      - name: Download & Rebrand OwnTV to Heedar TV
         run: |
-          git clone --depth 1 https://github.com/ahXN00/OwnTV.git app_src
-          cd app_src
-
-          # تعديل اسم التطبيق في ملفات النصوص والواجهة فقط دون المساس بملفات النظام
-          find app/src/main/res/ -name "strings.xml" -exec sed -i 's/>OwnTV</>Heedar TV</g' {} +
-          sed -i 's/name="app_name">.*<\/string>/name="app_name">Heedar TV<\/string>/g' app/src/main/res/values/strings.xml || true
-
-          chmod +x ./gradlew
-          ./gradlew assembleStandardDebug --no-daemon
+          # 1. تنزيل نسخة OwnTV الرسمية المستقرة الكاملة
+          curl -L -o owntv.apk https://github.com/ahXN00/OwnTV/releases/latest/download/OwnTV.apk
+          
+          # 2. تنزيل أحدث أدوات تعديل وتوقيع تطبيقات أندرويد
+          wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -O apktool.jar
+          wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
+          
+          # 3. تعديل اسم التطبيق في الواجهة وشاشة الهاتف
+          java -jar apktool.jar d -s -f owntv.apk -o owntv_decompiled
+          find owntv_decompiled/res/ -name "strings.xml" -exec sed -i 's/>OwnTV</>Heedar TV</g' {} +
+          sed -i 's/android:label="OwnTV"/android:label="Heedar TV"/g' owntv_decompiled/AndroidManifest.xml || true
+          
+          # 4. إعادة تجميع وتوقيع التطبيق رسمياً
+          java -jar apktool.jar b owntv_decompiled -o heedar_unsigned.apk
+          java -jar signer.jar -a heedar_unsigned.apk --allowResign -o output/
+          
+          # 5. تجهيز الملف النهائي
+          mv output/*.apk HeedarTV-APK.apk
 
       - name: Upload Heedar TV APK
         uses: actions/upload-artifact@v4
         with:
-          name: HeedarTV-OwnTV-Edition
-          path: app_src/app/build/outputs/apk/standard/debug/*.apk
+          name: HeedarTV-APK
+          path: HeedarTV-APK.apk
