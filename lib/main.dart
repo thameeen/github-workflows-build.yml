@@ -299,7 +299,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
   final List<Map<String, String>> _sources = [];
   bool _isLoading = false;
 
-  // إعدادات المستخدم المحفوظة
   String _aspectRatioMode = '16:9';
   bool _keepAwake = true;
   bool _tvFocusHighlight = true;
@@ -438,7 +437,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
       body: Row(
         textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
         children: [
-          // شريط تنقل جانبي متطور مع إمكانية التمرير لشاشات التلفزيون
           Container(
             color: const Color(0xFF111218),
             child: SingleChildScrollView(
@@ -515,7 +513,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // --- شاشة الرئيسية ---
   Widget _buildHomeView(String lang) {
     final favCount = _channels.where((c) => c.isFavorite).length;
 
@@ -629,7 +626,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // --- شاشة القنوات والمفضلة ---
   Widget _buildChannelsView(String lang, bool onlyFavs) {
     return _ChannelExplorer(
       channels:
@@ -642,7 +638,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // --- شاشة المصادر ---
   Widget _buildSourcesView(String lang) {
     final nameCtrl = TextEditingController();
     final urlCtrl = TextEditingController();
@@ -777,9 +772,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  // ==========================================
-  // شاشة الإعدادات الشاملة والفاخرة
-  // ==========================================
   Widget _buildSettingsView(String lang) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -793,8 +785,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
                 color: Color(0xFFD4AF37)),
           ),
           const SizedBox(height: 20),
-
-          // 1. قسم اللغات
           _buildSettingsHeader(AppStrings.get('lang', lang), Icons.language),
           ListTile(
             tileColor: const Color(0xFF161821),
@@ -817,8 +807,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
             ),
           ),
           const SizedBox(height: 20),
-
-          // 2. قسم إعدادات المشغل (Player)
           _buildSettingsHeader(
               AppStrings.get('player_settings', lang), Icons.play_circle_fill),
           ListTile(
@@ -861,8 +849,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
             },
           ),
           const SizedBox(height: 20),
-
-          // 3. قسم دعم أجهزة التلفزيون
           _buildSettingsHeader('أجهزة التلفزيون والريموت', Icons.tv),
           SwitchListTile(
             tileColor: const Color(0xFF161821),
@@ -880,8 +866,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
             },
           ),
           const SizedBox(height: 20),
-
-          // 4. قسم مسح الذاكرة
           _buildSettingsHeader('إدارة البيانات', Icons.storage),
           ListTile(
             tileColor: const Color(0xFF161821),
@@ -919,8 +903,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
             },
           ),
           const SizedBox(height: 20),
-
-          // 5. بطاقة حول التطبيق الفاخرة
           _buildSettingsHeader(AppStrings.get('about', lang), Icons.info_outline),
           Container(
             padding: const EdgeInsets.all(16),
@@ -1043,4 +1025,10 @@ class _ChannelExplorerState extends State<_ChannelExplorer> {
               ),
             ],
           ),
-          const SizedBox(h
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (ctx, i) {
