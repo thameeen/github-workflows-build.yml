@@ -1,4 +1,4 @@
-name: Build Heedar TV (OwnTV Full Rebrand)
+name: Build Heedar TV (OwnTV Clean Rebrand)
 
 on:
   push:
@@ -15,9 +15,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Download & Rebrand OwnTV to Heedar TV
+      - name: Download & Rebrand Strings Only
         run: |
-          # 1. تنزيل نسخة OwnTV الرسمية المستقرة الكاملة
+          # 1. تنزيل نسخة OwnTV الرسمية المستقرة
           curl -L -o owntv.apk https://github.com/ahXN00/OwnTV/releases/latest/download/OwnTV.apk
           
           # 2. تنزيل أدوات التعديل والتوقيع
@@ -27,32 +27,24 @@ jobs:
           # 3. فك التطبيق
           java -jar apktool.jar d -s -f owntv.apk -o owntv_decompiled
           
-          # 4. استبدال كلمة OwnTV أينما وُجدت في أي جملة بجميع اللغات
+          # 4. التعديل الذكي: استبدال الكلمة حصرياً داخل ملفات النصوص strings.xml فقط
           python3 -c "
           import os, re
           res_dir = 'owntv_decompiled/res'
           for root, _, files in os.walk(res_dir):
               for f in files:
-                  if f.endswith('.xml'):
+                  if f == 'strings.xml':
                       p = os.path.join(root, f)
                       with open(p, 'r', encoding='utf-8', errors='ignore') as fp:
                           c = fp.read()
                       
-                      # استبدال الكلمة داخل الجمل والنصوص (مثل الترحيب والخروج)
-                      def repl_tag(m):
+                      def repl(m):
                           val = m.group(1)
-                          val = val.replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV')
+                          if not val.strip().startswith('@'):
+                              val = val.replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV').replace('OWNTV', 'Heedar TV')
                           return '>' + val + '<'
                       
-                      # استبدال الكلمة داخل عناوين الأزرار والشاشات
-                      def repl_attr(m):
-                          attr = m.group(1)
-                          val = m.group(2).replace('OwnTV', 'Heedar TV').replace('owntv', 'Heedar TV')
-                          return attr + '=\"' + val + '\"'
-                      
-                      c2 = re.sub(r'>([^<]+)<', repl_tag, c)
-                      c2 = re.sub(r'(android:(?:text|title|label|hint))=\"([^\"]+)\"', repl_attr, c2)
-                      
+                      c2 = re.sub(r'>([^<]+)<', repl, c)
                       if c2 != c:
                           with open(p, 'w', encoding='utf-8') as fp:
                               fp.write(c2)
@@ -60,7 +52,7 @@ jobs:
           
           sed -i 's/android:label="OwnTV"/android:label="Heedar TV"/g' owntv_decompiled/AndroidManifest.xml || true
           
-          # 5. إعادة تجميع وتوقيع التطبيق بشهادة جديدة
+          # 5. تجميع وتوقيع التطبيق رسمياً
           java -jar apktool.jar b owntv_decompiled -o heedar_unsigned.apk
           java -jar signer.jar -a heedar_unsigned.apk --allowResign -o output/
           mv output/*.apk HeedarTV-APK.apk
