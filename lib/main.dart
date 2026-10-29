@@ -309,7 +309,7 @@ class _HeedarTvDirectScreenState extends State<HeedarTvDirectScreen> {
                               onPressed: () => setState(() => _isFullscreen = false),
                             ),
                             const SizedBox(width: 8),
-                            Text(_activeChannel?.name ?? 'Heedar TV', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text(_activeChanne?.name ?? 'Heedar TV', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                             const Spacer(),
                             IconButton(
                               icon: const Icon(Icons.tune, color: Colors.white),
