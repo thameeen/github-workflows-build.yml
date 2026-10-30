@@ -1,467 +1,169 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import 'package:video_player/video_player.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-// ── 1. نموذج القناة ──
-class Channel {
-  final String id, name, url, group;
-  final String? logo;
-  bool isFavorite;
-
-  Channel({
-    required this.id,
-    required this.name,
-    required this.url,
-    this.logo,
-    required this.group,
-    this.isFavorite = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'url': url,
-        'logo': logo,
-        'group': group,
-        'isFavorite': isFavorite,
-      };
-
-  factory Channel.fromJson(Map<String, dynamic> j) => Channel(
-        id: j['id'] ?? '',
-        name: j['name'] ?? '',
-        url: j['url'] ?? '',
-        logo: j['logo'],
-        group: j['group'] ?? 'عام',
-        isFavorite: j['isFavorite'] ?? false,
-      );
-}
-
-// ── 2. محلل روابط M3U ──
-class M3uService {
-  static const _uuid = Uuid();
-  static Future<List<Channel>> fetchAndParse(String url) async {
-    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 30));
-    final lines = const LineSplitter().convert(utf8.decode(res.bodyBytes, allowMalformed: true));
-    final List<Channel> list = [];
-    String? name, logo;
-    String group = 'عام';
-
-    for (var l in lines) {
-      l = l.trim();
-      if (l.startsWith('#EXTINF:')) {
-        logo = RegExp(r'tvg-logo="([^"]*)"').firstMatch(l)?.group(1);
-        group = RegExp(r'group-title="([^"]*)"').firstMatch(l)?.group(1) ?? 'عام';
-        final c = l.lastIndexOf(',');
-        name = c != -1 ? l.substring(c + 1).trim() : 'قناة';
-      } else if (!l.startsWith('#') && (l.startsWith('http://') || l.startsWith('https://'))) {
-        if (name != null) list.add(Channel(id: _uuid.v4(), name: name, url: l, logo: logo, group: group));
-        name = null; logo = null; group = 'عام';
-      }
-    }
-    return list;
-  }
-}
-
-// ── 3. التطبيق والثيم الملكي الأسود والذهبي ──
 void main() => runApp(const HeedarTvApp());
+
+const gold = Color(0xFFD4AF37);
+const bg = Color(0xFF07080A);
+
+class MediaLink {
+  final String title;
+  final String subtitle;
+  final String category;
+  final String url;
+  final IconData icon;
+  const MediaLink(this.title, this.subtitle, this.category, this.url, this.icon);
+
+  Uri get uri => Uri.parse(url);
+}
+
+// روابط صفحات رسمية فقط. التوفر والمحتوى قد يختلفان حسب البلد.
+const catalog = <MediaLink>[
+  MediaLink('التلفزيون الأردني — بث مباشر', 'الموقع الرسمي • الأردن', 'قنوات', 'https://www.jrtv.gov.jo/ar/live-tv', Icons.live_tv),
+  MediaLink('رؤيا — بث مباشر', 'الموقع الرسمي • الأردن', 'قنوات', 'https://roya.tv/live-stream/1', Icons.live_tv),
+  MediaLink('قنوات رؤيا', 'Roya TV وRoya News وقنوات أخرى', 'قنوات', 'https://roya.tv/', Icons.tv),
+  MediaLink('شاهد — بث ومحتوى عربي', 'قد يتطلب بعض المحتوى اشتراكاً', 'قنوات', 'https://shahid.mbc.net/ar', Icons.live_tv),
+  MediaLink('التلفزيون الأردني — مسلسلات', 'المسلسلات والأرشيف الرسمي', 'مسلسلات', 'https://www.jrtv.gov.jo/ar/series', Icons.movie),
+  MediaLink('رؤيا — مسلسلات', 'المسلسلات على الموقع الرسمي', 'مسلسلات', 'https://roya.tv/series', Icons.tv),
+  MediaLink('شاهد — مسلسلات', 'حلقات مجانية ومدفوعة حسب العنوان', 'مسلسلات', 'https://shahid.mbc.net/ar/series', Icons.tv),
+  MediaLink('قناة شاهد الرسمية على يوتيوب', 'حلقات ومقاطع يتيحها الناشر مجاناً', 'مسلسلات', 'https://www.youtube.com/@MBCShahid', Icons.smart_display),
+  MediaLink('tabii عربي — دراما تركية', 'قناة الناشر الرسمية؛ حلقات عربية متاحة حسب العنوان', 'مسلسلات تركية', 'https://www.youtube.com/@tabii.arabic', Icons.subtitles),
+  MediaLink('قيامة أرطغرل — الحلقات الرسمية', 'قائمة حلقات من قناة tabii عربي الرسمية', 'مسلسلات تركية', 'https://www.youtube.com/playlist?list=PLZhY-MJA-pw-hzp40xUApZd8LLgJEZD53', Icons.movie),
+  MediaLink('Deep in Love — ترجمة عربية', 'قائمة رسمية على tabii؛ الترجمة متاحة من إعدادات يوتيوب', 'مسلسلات تركية', 'https://www.youtube.com/playlist?list=PLDoK5CcjJZA5zEFnpeYwsTjsMHfrQlpa_', Icons.subtitles),
+  MediaLink('رؤيا — أفلام مختارة', 'اختيارات متاحة عبر الموقع الرسمي', 'أفلام', 'https://roya.tv/', Icons.local_movies),
+  MediaLink('شاهد — أفلام', 'تختلف الإتاحة؛ قد يتطلب بعضها VIP', 'أفلام', 'https://shahid.mbc.net/ar/movies', Icons.movie_creation),
+  MediaLink('الجزيرة — بث مباشر', 'قنوات الجزيرة الرسمية', 'أخبار', 'https://www.aljazeera.net/live', Icons.newspaper),
+  MediaLink('العربية — بث مباشر', 'البث الرسمي لقناة العربية', 'أخبار', 'https://www.alarabiya.net/live-stream', Icons.newspaper),
+  MediaLink('الحدث — بث مباشر', 'البث الرسمي لقناة الحدث', 'أخبار', 'https://www.alarabiya.net/live-stream-hadath', Icons.newspaper),
+  MediaLink('قناة المملكة الأردنية', 'موقع القناة الرسمي والبث المباشر', 'أخبار', 'https://almamlakatv.com/', Icons.newspaper),
+  MediaLink('المملكة — بث مباشر على يوتيوب', 'البث الرسمي؛ إذا كان متاحاً', 'أخبار', 'https://www.youtube.com/watch?v=YAQQ1RLfQtY', Icons.smart_display),
+  MediaLink('التلفزيون الأردني — القناة الرياضية', 'اختَر الرياضية من البث الرسمي لقنوات JRTV', 'رياضة', 'https://www.jrtv.gov.jo/ar/live-tv', Icons.sports_soccer),
+  MediaLink('Jordan TV Sport — يوتيوب', 'حلقات وملخصات ومحتوى رياضي رسمي', 'رياضة', 'https://www.youtube.com/@jordantvsport', Icons.sports_soccer),
+  MediaLink('Roya Sports — يوتيوب', 'أخبار وملخصات رياضية رسمية؛ البث حسب الحقوق', 'رياضة', 'https://www.youtube.com/royasports', Icons.sports_soccer),
+];
 
 class HeedarTvApp extends StatelessWidget {
   const HeedarTvApp({super.key});
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Heedar TV',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF07080A),
-        primaryColor: const Color(0xFFD4AF37),
-        fontFamily: 'sans-serif',
-      ),
-      home: const LuxuryPortalScreen(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Heedar TV',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: bg,
+          colorScheme: ColorScheme.fromSeed(seedColor: gold, brightness: Brightness.dark),
+          useMaterial3: true,
+        ),
+        home: const CatalogScreen(),
+      );
 }
 
-// ── 4. الواجهة الرئيسية (القائمة على اليسار + 3 كروت سينمائية) ──
-class LuxuryPortalScreen extends StatefulWidget {
-  const LuxuryPortalScreen({super.key});
+class CatalogScreen extends StatefulWidget {
+  const CatalogScreen({super.key});
   @override
-  State<LuxuryPortalScreen> createState() => _LuxuryPortalScreenState();
+  State<CatalogScreen> createState() => _CatalogScreenState();
 }
 
-class _LuxuryPortalScreenState extends State<LuxuryPortalScreen> {
-  List<Channel> _channels = [];
-  bool _loading = false;
+class _CatalogScreenState extends State<CatalogScreen> {
+  String selected = 'الكل';
+  String query = '';
+  bool opening = false;
 
-  @override
-  void initState() {
-    super.initState();
-    try { WakelockPlus.enable(); } catch (_) {}
-    _load();
-  }
-
-  Future<void> _load() async {
-    final p = await SharedPreferences.getInstance();
-    final data = p.getString('ch_list');
-    final favs = p.getStringList('fav_list') ?? [];
-    if (data != null) {
-      final List dec = jsonDecode(data);
-      setState(() {
-        _channels = dec.map((e) {
-          final c = Channel.fromJson(e);
-          c.isFavorite = favs.contains(c.url);
-          return c;
-        }).toList();
-      });
+  Future<void> openOfficial(MediaLink item) async {
+    setState(() => opening = true);
+    try {
+      final ok = await launchUrl(item.uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذّر فتح الرابط. تحقق من اتصال الإنترنت.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذّر فتح الرابط.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => opening = false);
     }
   }
 
-  Future<void> _save() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString('ch_list', jsonEncode(_channels.map((e) => e.toJson()).toList()));
-    await p.setStringList('fav_list', _channels.where((e) => e.isFavorite).map((e) => e.url).toList());
-  }
-
-  void _addSourceDialog() {
-    final u = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF11141C),
-        title: const Text('إضافة رابط M3U / M3U8', style: TextStyle(color: Color(0xFFD4AF37))),
-        content: TextField(controller: u, decoration: const InputDecoration(labelText: 'رابط البث المباشر')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
-            onPressed: () async {
-              if (u.text.trim().isNotEmpty) {
-                Navigator.pop(ctx);
-                setState(() => _loading = true);
-                try {
-                  final list = await M3uService.fetchAndParse(u.text.trim());
-                  _channels.addAll(list);
-                  await _save();
-                } catch (_) {}
-                if (mounted) setState(() => _loading = false);
-              }
-            },
-            child: const Text('تحميل'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        // الشريط الجانبي على اليسار حصرياً
-        children: [
-          // 1. القائمة الجانبية (Left Sidebar)
-          Container(
-            width: 62,
-            color: const Color(0xFF0C0E14),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFD4AF37), width: 1.5)),
-                  child: const Icon(Icons.tv, color: Color(0xFFD4AF37), size: 24),
-                ),
-                const Divider(color: Colors.white12, height: 30),
-                IconButton(
-                  tooltip: 'إضافة مصدر',
-                  icon: const Icon(Icons.add_circle, color: Color(0xFFD4AF37), size: 28),
-                  onPressed: _addSourceDialog,
-                ),
-                IconButton(
-                  tooltip: 'المفضلة',
-                  icon: const Icon(Icons.star, color: Colors.amber, size: 26),
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => LiveViewScreen(channels: _channels.where((c) => c.isFavorite).toList(), onSave: _save)));
-                  },
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'مسح القنوات',
-                  icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                  onPressed: () async {
-                    final p = await SharedPreferences.getInstance();
-                    await p.remove('ch_list');
-                    setState(() => _channels.clear());
-                  },
-                ),
-                const SizedBox(height: 14),
-              ],
-            ),
-          ),
-          const VerticalDivider(width: 1, color: Colors.white12),
-
-          // 2. الواجهة الرئيسية بالبطاقات الثلاث
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // الهيدر والاسم الذهبي
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('HEEDAR TV', style: TextStyle(color: Color(0xFFD4AF37), fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                          SizedBox(height: 2),
-                          Text('البوابة الملكية الترفيهية الفاخرة', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF141722),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.4)),
-                        ),
-                        child: Text('${_channels.length} قناة متاحة', style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-
-                  // ── البطاقات الثلاث بالصور المناسبة ──
-                  Expanded(
-                    child: Row(
-                      children: [
-                        // كرت البث المباشر (صورة بث واستوديو)
-                        _card(
-                          title: 'بث مباشر',
-                          sub: 'قنوات فضائية ورياضية',
-                          img: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=700',
-                          icon: Icons.live_tv_rounded,
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => LiveViewScreen(channels: _channels, onSave: _save)));
-                          },
-                        ),
-                        const SizedBox(width: 14),
-
-                        // كرت الأفلام (صورة سينما ومسرح)
-                        _card(
-                          title: 'الأفلام',
-                          sub: 'مكتبة VOD السينمائية',
-                          img: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=700',
-                          icon: Icons.movie_creation_rounded,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم الأفلام جاهز للمشاهدة')));
-                          },
-                        ),
-                        const SizedBox(width: 14),
-
-                        // كرت المسلسلات (صورة إنتاج وتلفزيون)
-                        _card(
-                          title: 'المسلسلات',
-                          sub: 'المواسم والحلقات الكاملة',
-                          img: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=700',
-                          icon: Icons.tv_rounded,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('قسم المسلسلات جاهز للمشاهدة')));
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _card({required String title, required String sub, required String img, required IconData icon, required VoidCallback onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.35), width: 1.5),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedNetworkImage(imageUrl: img, fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(color: const Color(0xFF141722))),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.black.withOpacity(0.15), Colors.black.withOpacity(0.88)],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(backgroundColor: const Color(0xFFD4AF37), radius: 20, child: Icon(icon, color: Colors.black, size: 22)),
-                      const SizedBox(height: 10),
-                      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 3),
-                      Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── 5. شاشة البث المباشر (قنوات + مشغل بجانبها فوري) ──
-class LiveViewScreen extends StatefulWidget {
-  final List<Channel> channels;
-  final VoidCallback onSave;
-  const LiveViewScreen({super.key, required this.channels, required this.onSave});
-  @override
-  State<LiveViewScreen> createState() => _LiveViewScreenState();
-}
-
-class _LiveViewScreenState extends State<LiveViewScreen> {
-  Channel? _cur;
-  VideoPlayerController? _c;
-  String _cat = 'الكل', _q = '';
-  bool _load = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.channels.isNotEmpty) _play(widget.channels.first);
-  }
-
-  @override
-  void dispose() {
-    _c?.dispose();
-    super.dispose();
-  }
-
-  void _play(Channel ch) {
-    setState(() { _cur = ch; _load = true; });
-    _c?.dispose();
-    _c = VideoPlayerController.networkUrl(Uri.parse(ch.url))
-      ..initialize().then((_) {
-        if (mounted) { setState(() => _load = false); _c?.play(); }
-      }).catchError((_) { if (mounted) setState(() => _load = false); });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cats = ['الكل', 'المفضلة', ...widget.channels.map((e) => e.group).toSet()];
-    final list = widget.channels.where((c) {
-      final mC = _cat == 'الكل' ? true : (_cat == 'المفضلة' ? c.isFavorite : c.group == _cat);
-      final mQ = c.name.toLowerCase().contains(_q.toLowerCase());
-      return mC && mQ;
+    const categories = ['الكل', 'قنوات', 'أفلام', 'مسلسلات', 'مسلسلات تركية', 'أخبار', 'رياضة'];
+    final filtered = catalog.where((item) {
+      final categoryMatch = selected == 'الكل' || item.category == selected;
+      final queryMatch = '${item.title} ${item.subtitle}'.toLowerCase().contains(query.toLowerCase());
+      return categoryMatch && queryMatch;
     }).toList();
 
     return Scaffold(
-      body: Row(
-        children: [
-          // قائمة القنوات
-          Expanded(
-            flex: 4,
-            child: Container(
-              color: const Color(0xFF0C0E14),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      IconButton(icon: const Icon(Icons.arrow_back, color: Color(0xFFD4AF37)), onPressed: () => Navigator.pop(context)),
-                      Expanded(
-                        child: TextField(
-                          onChanged: (v) => setState(() => _q = v),
-                          decoration: const InputDecoration(hintText: 'ابحث عن قناة...', isDense: true, border: InputBorder.none),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(
-                    height: 36,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: cats.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text(cats[i], style: const TextStyle(fontSize: 11)),
-                          selected: _cat == cats[i],
-                          selectedColor: const Color(0xFFD4AF37),
-                          backgroundColor: const Color(0xFF141722),
-                          onSelected: (_) => setState(() => _cat = cats[i]),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: list.length,
-                      itemBuilder: (_, i) {
-                        final ch = list[i];
-                        final isSel = ch.url == _cur?.url;
-                        return ListTile(
-                          dense: true,
-                          tileColor: isSel ? const Color(0xFFD4AF37).withOpacity(0.18) : null,
-                          title: Text(ch.name, maxLines: 1, style: TextStyle(fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? const Color(0xFFD4AF37) : Colors.white)),
-                          trailing: IconButton(
-                            icon: Icon(ch.isFavorite ? Icons.star : Icons.star_border, color: ch.isFavorite ? Colors.amber : Colors.white24, size: 18),
-                            onPressed: () { setState(() => ch.isFavorite = !ch.isFavorite); widget.onSave(); },
-                          ),
-                          onTap: () => _play(ch),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const VerticalDivider(width: 1, color: Colors.white12),
-
-          // نافذة المشغل الفوري
-          Expanded(
-            flex: 6,
-            child: Container(
-              color: Colors.black,
-              child: Center(
-                child: _load
-                    ? const CircularProgressIndicator(color: Color(0xFFD4AF37))
-                    : _c != null && _c!.value.isInitialized
-                        ? AspectRatio(aspectRatio: _c!.value.aspectRatio, child: VideoPlayer(_c!))
-                        : const Text('اختر قناة للبدء بالبث', style: TextStyle(color: Colors.white54)),
-              ),
-            ),
-          ),
-        ],
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0C0E14),
+        title: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('HEEDAR TV', style: TextStyle(color: gold, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+          Text('دليل المصادر الرسمية — الأردن', style: TextStyle(fontSize: 11, color: Colors.white60)),
+        ]),
+        actions: [if (opening) const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: gold)))],
       ),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: TextField(
+            onChanged: (v) => setState(() => query = v),
+            decoration: InputDecoration(
+              hintText: 'ابحث عن قناة أو فيلم أو مسلسل',
+              prefixIcon: const Icon(Icons.search, color: gold),
+              filled: true,
+              fillColor: const Color(0xFF12151D),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 48,
+          child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: [
+            for (final category in categories)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ChoiceChip(
+                  label: Text(category),
+                  selected: selected == category,
+                  selectedColor: gold,
+                  onSelected: (_) => setState(() => selected = category),
+                ),
+              ),
+          ]),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text('تفتح العناصر مواقعها أو تطبيقاتها الرسمية. توفر المحتوى وشروط المشاهدة يحددهما كل مزوّد.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('لا توجد نتائج', style: TextStyle(color: Colors.white60)))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(14),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 9),
+                  itemBuilder: (context, index) {
+                    final item = filtered[index];
+                    return Card(
+                      color: const Color(0xFF12151D),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: gold.withOpacity(.22))),
+                      child: ListTile(
+                        leading: CircleAvatar(backgroundColor: gold.withOpacity(.16), child: Icon(item.icon, color: gold)),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text('${item.category} • ${item.subtitle}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        trailing: const Icon(Icons.open_in_new, color: gold, size: 20),
+                        onTap: () => openOfficial(item),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
     );
   }
 }
