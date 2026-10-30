@@ -2,12 +2,13 @@ name: Build Heedar TV (Luxury Left Edition)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -15,22 +16,20 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: "zulu"
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: "stable"
 
       - name: Build APK
         run: |
           flutter create --org com.heedar --project-name heedar_tv app
           cd app
-          flutter pub add video_player shared_preferences http wakelock_plus uuid cached_network_image
+          flutter pub add video_player shared_preferences http wakelock_plus uuid cached_network_image url_launcher
           cp ../lib/main.dart lib/main.dart
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET"/>\n<uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
-          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
           flutter build apk --release
 
       - name: Upload APK
